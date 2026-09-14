@@ -438,8 +438,8 @@ test('routing handles a tab switching files while its initial read is pending', 
   const second = h.vault.seed('后打开.md', serializeBoard(createBoard()));
   let release!: () => void;
   const gate = new Promise<void>(resolve => { release = resolve; });
-  const read = h.vault.cachedRead.bind(h.vault);
-  h.vault.cachedRead = async file => { if (file === first) await gate; return read(file); };
+  const read = h.vault.read.bind(h.vault);
+  h.vault.read = async file => { if (file === first) await gate; return read(file); };
   const leaf = h.note(first); h.workspace.emit('file-open', first);
   await leaf.setViewState({ type: 'markdown', state: { file: second.path } });
   h.workspace.emit('file-open', second); release(); await settle();
@@ -525,4 +525,86 @@ test('editing historical boards preserves their JSON format, while export create
   button(view.contentEl.querySelector('[role="menu"]')!, '导出为 Markdown').click(); await settle();
   assert.equal(h.vault.text.get(file.path), saved);
   assert.deepEqual(parseBoard(h.vault.text.get('旧格式 - 导出.md')!), JSON.parse(saved));
+});
+
+test('late workspace restoration routes a board even when file-open happened before its leaf existed', async t => {
+  const h = await fixture(t);
+  const file = h.vault.seed('延迟恢复.md', serializeBoard(createBoard()));
+  h.workspace.emit('file-open', file); await settle();
+  const leaf = h.note(file);
+  h.workspace.emit('layout-change'); await settle();
+  assert.equal(leaf.getViewState().type, 'linb-kanban-view');
+  assert.deepEqual(h.vault.writes, []);
+});
+
+test('reactivating or rebuilding a Markdown leaf restores its board without another file-open event', async t => {
+  const h = await fixture(t);
+  const file = h.vault.seed('切换标签.md', serializeBoard(createBoard()));
+  const original = h.vault.text.get(file.path);
+  const leaf = h.note(file);
+  for (const event of ['active-leaf-change', 'layout-change']) {
+    await leaf.setViewState({ type: 'markdown', state: { file: file.path } });
+    h.workspace.emit(event, leaf); await settle();
+    assert.equal(leaf.getViewState().type, 'linb-kanban-view', event);
+  }
+  assert.equal(h.vault.text.get(file.path), original);
+  assert.deepEqual(h.vault.writes, []);
+});
+
+test('a synced board replacing an already open note is recognized after vault modification', async t => {
+  const h = await fixture(t);
+  const file = h.vault.seed('同步中.md', '# 等待同步');
+  const leaf = h.note(file); h.workspace.emit('file-open', file); await settle();
+  assert.equal(leaf.getViewState().type, 'markdown');
+  const source = serializeBoard(createBoard()); h.vault.text.set(file.path, source);
+  h.vault.emit('modify', file); await settle();
+  assert.equal(leaf.getViewState().type, 'linb-kanban-view');
+  assert.equal(h.vault.text.get(file.path), source);
+  assert.deepEqual(h.vault.writes, []);
+});
+
+test('routing uses fresh file contents rather than stale cached Markdown', async t => {
+  const h = await fixture(t);
+  const file = h.vault.seed('最新看板.md', serializeBoard(createBoard()));
+  h.vault.cachedRead = async () => '# 旧缓存';
+  const leaf = h.note(file); h.workspace.emit('file-open', file); await settle();
+  assert.equal(leaf.getViewState().type, 'linb-kanban-view');
+  assert.deepEqual(h.vault.writes, []);
+});
+
+test('a same-file update during an in-flight view check triggers one fresh check', async t => {
+  const h = await fixture(t);
+  const file = h.vault.seed('读取中.md', '# 同步前');
+  const leaf = h.note(file);
+  let release!: () => void;
+  const gate = new Promise<void>(resolve => { release = resolve; });
+  let reads = 0;
+  h.vault.read = async current => {
+    const captured = h.vault.text.get(current.path)!;
+    if (++reads === 1) await gate;
+    return captured;
+  };
+  h.workspace.emit('file-open', file); await settle();
+  h.vault.text.set(file.path, serializeBoard(createBoard()));
+  h.vault.emit('modify', file); await settle();
+  release(); await settle();
+  assert.equal(leaf.getViewState().type, 'linb-kanban-view');
+  assert.equal(reads, 2);
+  assert.deepEqual(h.vault.writes, []);
+});
+
+test('view event bursts are coalesced and unloading cancels queued routing', async t => {
+  const h = await fixture(t);
+  const file = h.vault.seed('普通笔记.md', '# 普通笔记');
+  const leaf = h.note(file);
+  let reads = 0;
+  const read = h.vault.read.bind(h.vault);
+  h.vault.read = async current => { reads++; return read(current); };
+  h.workspace.emit('file-open', file); h.workspace.emit('layout-change'); h.workspace.emit('active-leaf-change', leaf);
+  await settle(); await settle();
+  assert.equal(reads, 1);
+  assert.equal(leaf.getViewState().type, 'markdown');
+  h.workspace.emit('layout-change'); h.plugin.unload(); await settle();
+  assert.equal(reads, 1);
+  assert.deepEqual(h.vault.writes, []);
 });

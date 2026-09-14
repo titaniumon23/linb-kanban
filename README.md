@@ -30,6 +30,8 @@ Download the installation ZIP from the [GitHub release](https://github.com/titan
 
 ## Use
 
+Version 0.3.3 restores board views after delayed tab loading, tab activation, layout changes and sync updates. These checks only select the view and do not rewrite the note.
+
 Click the stacked-pages-plus ribbon icon, or run **LinB Kanban: 新建看板** from the command palette. Enter a name and select **创建**.
 
 - **栏**: arrange cards in named columns. Click a column name to edit it.

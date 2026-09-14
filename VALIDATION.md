@@ -1,14 +1,16 @@
-# LinB Kanban 0.3.2 validation
+# LinB Kanban 0.3.3 validation
 
 Date: 2026-09-14.
 
 ## Automated checks
 
+- Six view-routing regressions cover late leaf restoration, activation/layout changes without file-open, sync replacing an open note, stale read caches, an update during an in-flight read, and queued-event cancellation on unload. Four reproductions failed before this correction. Routing is event-driven and coalesced; all cases preserve file contents.
+
 - Checkbox CSS now reserves a text gutter and positions each box at the center of the first line height. Wrapped lines retain text indentation; the native checkbox size and colors are preserved. This CSS correction has not received full Obsidian visual acceptance.
 
 - Fixed the upgrade regression where unsupported historical file types disappeared from the explorer and normal board picker. Historical extensions are registered again; opening is read-only and explicit edits preserve JSON format. Export creates a separate Markdown copy.
 
-- TypeScript checking and all 66 automated tests passed.
+- TypeScript checking and all 72 automated tests passed.
 - Markdown round trips preserve columns/wall layout, global and per-column order, all card colors, empty columns, text, checked tasks, attachments and unknown metadata.
 - Body text is stored once. Source body edits are parsed; stale editors cannot overwrite or delete an externally edited body. Damaged markers and unsupported structural edits are refused without writes.
 - Compiled-plugin host tests cover automatic routing of received Markdown and restored tabs, ordinary-note isolation, file-switch races, unload behavior, creation/export paths, and non-destructive legacy import.

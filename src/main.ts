@@ -16,6 +16,8 @@ export default class LinBKanbanPlugin extends Plugin {
   repository!: BoardRepository;
   private routing = new WeakSet<WorkspaceLeaf>();
   private stopped = false;
+  private routingQueued = false;
+  private routingEpoch = 0;
   async onload(): Promise<void> {
     const find = (path: string): TFile => {
       const file = this.app.vault.getAbstractFileByPath(path);
@@ -31,8 +33,14 @@ export default class LinBKanbanPlugin extends Plugin {
     try { this.registerExtensions(['moss'], VIEW_TYPE); }
     catch { new Notice('旧版文件显示兼容未能启用，仍可通过“LinB Kanban: 打开看板”访问旧看板。'); }
     this.register(() => { this.stopped = true; });
-    this.registerEvent(this.app.workspace.on('file-open', () => { void this.routeOpenNotes(); }));
-    this.app.workspace.onLayoutReady(() => { void this.routeOpenNotes(); });
+    const requestRouting = () => { this.routingEpoch++; this.queueRouting(); };
+    this.registerEvent(this.app.workspace.on('file-open', requestRouting));
+    this.registerEvent(this.app.workspace.on('active-leaf-change', requestRouting));
+    this.registerEvent(this.app.workspace.on('layout-change', requestRouting));
+    this.registerEvent(this.app.vault.on('modify', file => {
+      if (file instanceof TFile && file.extension === 'md') requestRouting();
+    }));
+    this.app.workspace.onLayoutReady(requestRouting);
     this.addRibbonIcon('copy-plus', '新建看板', () => this.createBoardDialog());
     this.addCommand({ id: 'open-board', name: '打开看板', callback: () => this.chooseBoard() });
     this.addCommand({ id: 'create-board', name: '新建看板', callback: () => this.createBoardDialog() });
@@ -95,6 +103,14 @@ export default class LinBKanbanPlugin extends Plugin {
         .catch(error => new Notice(problem(error)));
     }).open();
   }
+  private queueRouting(): void {
+    if (this.stopped || this.routingQueued) return;
+    this.routingQueued = true;
+    queueMicrotask(() => {
+      this.routingQueued = false;
+      if (!this.stopped) void this.routeOpenNotes();
+    });
+  }
   private async routeOpenNotes(): Promise<void> {
     if (this.stopped) return;
     await Promise.all(this.app.workspace.getLeavesOfType('markdown').map(async leaf => {
@@ -104,14 +120,16 @@ export default class LinBKanbanPlugin extends Plugin {
       const file = this.app.vault.getAbstractFileByPath(path);
       if (!(file instanceof TFile) || file.extension !== 'md') return;
       this.routing.add(leaf);
+      const epoch = this.routingEpoch;
       try {
-        const text = await this.app.vault.cachedRead(file);
+        const text = await this.app.vault.read(file);
         if (this.stopped || leaf.getViewState().type !== 'markdown' || leaf.getViewState().state?.file !== path) return;
         if (isBoardMarkdown(text)) await leaf.setViewState({ type: VIEW_TYPE, state: { file: path } });
       } catch (error) { if (!this.stopped) new Notice(problem(error)); }
       finally {
         this.routing.delete(leaf);
-        if (!this.stopped && leaf.getViewState().type === 'markdown' && leaf.getViewState().state?.file !== path) void this.routeOpenNotes();
+        if (!this.stopped && leaf.getViewState().type === 'markdown' &&
+          (leaf.getViewState().state?.file !== path || epoch !== this.routingEpoch)) this.queueRouting();
       }
     }));
   }
