@@ -25,6 +25,7 @@ export type BoardOperation =
 export interface WallHost {
   save(operation: BoardOperation): Promise<Board>;
   importFiles(files: File[]): Promise<Attachment[]>;
+  chooseVaultImages?(): Promise<Attachment[]>;
   resolveAsset(path: string): string;
   renderMarkdown(text: string, container: HTMLElement): void | Promise<void>;
   openAttachment(attachment: Attachment): void;

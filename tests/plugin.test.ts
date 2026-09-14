@@ -25,6 +25,7 @@ class Folder {
   isRoot() { return this.path === '/'; }
 }
 class VaultFile {
+  get name() { return this.path.split('/').at(-1)!; }
   extension: string;
   basename: string;
   stat = { mtime: Date.now() };
@@ -104,6 +105,7 @@ async function fixture(t: TestContext) {
   const notices: string[] = [];
   const opened: string[] = [];
   const views: any[] = [];
+  const modals: any[] = [];
   const factories = new Map<string, (leaf: any) => any>();
   const extensions: { extensions: string[]; type: string }[] = [];
   const commands: { id: string; name: string; callback: () => unknown }[] = [];
@@ -137,8 +139,9 @@ async function fixture(t: TestContext) {
     contentEl = dom.window.document.createElement('div');
     titleEl = dom.window.document.createElement('h2');
     constructor(public app: unknown) { super(); }
-    open() {}
-    close() {}
+    open() { modals.push(this); }
+    close() { this.onClose(); }
+    onClose() {}
     setPlaceholder(_value: string) {}
   }
   const mockObsidian = {
@@ -161,7 +164,7 @@ async function fixture(t: TestContext) {
     }
   });
   return {
-    vault, notices, opened, factories, extensions, commands, ribbons,
+    vault, notices, opened, factories, extensions, commands, ribbons, modals,
     async load(file: VaultFile) {
       const factory = factories.get('moss-wall-view'); assert.ok(factory);
       const leaf: any = { app };
@@ -317,4 +320,75 @@ test('file picker uploads a picture and a document through the real vault host a
   await settle();
   assert.deepEqual(h.opened, attachments.map(item => item.path));
   assert.deepEqual(h.notices, []);
+});
+
+test('vault image picker searches names and folders, reuses original files and avoids duplicate attachments', async t => {
+  const h = await fixture(t);
+  const image = h.vault.seed('素材/产品/封面.PNG', 'existing image');
+  h.vault.seed('素材/活动/封面.png', 'another image');
+  h.vault.seed('素材/备注.md', 'not an image');
+  h.vault.seed('素材/项目.prproj', 'not an image');
+  const file = h.vault.seed('看板.moss', serializeBoard(createBoard()));
+  const view = await h.load(file);
+  button(view.contentEl.querySelector('.moss-toolbar')!, '添加卡片').click();
+  const editor = view.contentEl.querySelector('[role="dialog"]')!;
+  fill(editor, '内容', '正文保留。');
+  const choose = button(editor, '从库中选图'); choose.click();
+  assert.equal(choose.disabled, true);
+  let picker = h.modals.at(-1);
+  assert.deepEqual(picker.getSuggestions('产品'), [image]);
+  assert.equal(picker.getSuggestions('封面').length, 2);
+  assert.equal(picker.getSuggestions('').length, 2);
+  const suggestion = editor.ownerDocument.createElement('div'); picker.renderSuggestion(image, suggestion);
+  assert.match(suggestion.textContent!, /素材\/产品\/封面.PNG/);
+  assert.equal(suggestion.querySelector('img')!.getAttribute('src'), `https://vault.test/${encodeURI(image.path)}`);
+  // Match Obsidian's possible close-before-selection callback ordering.
+  picker.close(); picker.onChooseSuggestion(image); await settle();
+  assert.equal(choose.disabled, false);
+  choose.click(); picker = h.modals.at(-1); picker.close(); picker.onChooseSuggestion(image); await settle();
+  assert.equal(editor.querySelectorAll('.moss-editor-attachment').length, 1);
+  assert.equal(h.vault.writes.length, 0, 'Selecting an existing image must not copy or modify files');
+  button(editor, '添加卡片').click(); await settle();
+  let board = parseBoard(h.vault.text.get(file.path)!);
+  assert.equal(board.cards[0].body, '正文保留。');
+  assert.deepEqual(board.cards[0].attachments, [{ path: image.path, name: image.name, mime: 'image/png' }]);
+  assert.ok(h.vault.writes.every(write => write.kind === 'process' && write.path === file.path));
+  await view.onUnloadFile(); await view.onLoadFile(file); await settle();
+  assert.equal(view.contentEl.querySelector('article img')?.getAttribute('src'), `https://vault.test/${encodeURI(image.path)}`);
+  button(view.contentEl, '未命名卡片').click();
+  const reopened = view.contentEl.querySelector('[role="dialog"]')!;
+  button(reopened, `移除附件：${image.name}`).click(); button(reopened, '保存修改').click(); await settle();
+  board = parseBoard(h.vault.text.get(file.path)!);
+  assert.deepEqual(board.cards[0].attachments, []);
+  assert.equal(h.vault.getAbstractFileByPath(image.path), image, 'Removing a reference must keep the original image');
+  assert.equal(h.vault.text.get(image.path), 'existing image');
+});
+
+test('cancelling image selection keeps the draft editable, and unloading closes the picker', async t => {
+  const h = await fixture(t); h.vault.seed('图片.png', 'image');
+  const file = h.vault.seed('看板.moss', serializeBoard(createBoard())); const view = await h.load(file);
+  button(view.contentEl.querySelector('.moss-toolbar')!, '添加卡片').click();
+  const editor = view.contentEl.querySelector('[role="dialog"]')!;
+  fill(editor, '内容', '未保存的文字'); const choose = button(editor, '从库中选图'); choose.click();
+  h.modals.at(-1).close(); await settle();
+  assert.equal(choose.disabled, false); assert.equal(editor.querySelector('textarea')!.value, '未保存的文字');
+  assert.equal(editor.querySelectorAll('.moss-editor-attachment').length, 0);
+  choose.click(); await view.onUnloadFile(); await settle();
+  assert.equal(view.contentEl.querySelector('[role="dialog"]'), null);
+  assert.deepEqual(h.vault.writes, []);
+});
+
+test('missing or deleted vault images show a recoverable message without touching existing files', async t => {
+  const h = await fixture(t);
+  const file = h.vault.seed('看板.moss', serializeBoard(createBoard())); const view = await h.load(file);
+  button(view.contentEl.querySelector('.moss-toolbar')!, '添加卡片').click();
+  const editor = view.contentEl.querySelector('[role="dialog"]')!;
+  const choose = button(editor, '从库中选图'); choose.click(); await settle();
+  assert.equal(h.modals.length, 0); assert.match(h.notices[0], /还没有图片/); assert.equal(choose.disabled, false);
+  const image = h.vault.seed('图片.svg', '<svg/>'); choose.click();
+  const picker = h.modals.at(-1); assert.deepEqual(picker.getSuggestions(''), [image]);
+  h.vault.objects.delete(image.path); picker.close(); picker.onChooseSuggestion(image); await settle();
+  assert.match(editor.textContent, /已被删除/); assert.equal(choose.disabled, false);
+  assert.equal(editor.querySelectorAll('.moss-editor-attachment').length, 0);
+  assert.deepEqual(h.vault.writes, []);
 });

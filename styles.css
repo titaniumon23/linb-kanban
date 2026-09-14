@@ -271,3 +271,10 @@
 .moss-wall .moss-card[data-card-color]:not([data-card-color='white']):hover { border-color: color-mix(in srgb, var(--moss-card-tint) 50%, var(--background-modifier-border-hover, var(--background-modifier-border))); }
 .moss-wall .moss-color-select:focus { border-color: var(--interactive-accent); }
 .moss-wall .moss-color-select option { color: var(--text-normal); background: var(--background-primary); }
+
+.moss-wall .moss-upload-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; }
+.moss-vault-image-option { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.moss-vault-image-option > img { width: 44px; height: 44px; flex: 0 0 44px; object-fit: cover; border-radius: var(--radius-s, 4px); }
+.moss-vault-image-option > div { min-width: 0; }
+.moss-vault-image-option :is(small, div > div) { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.moss-vault-image-option small { color: var(--text-muted); font-size: var(--font-ui-smaller, 12px); }

@@ -6,7 +6,7 @@ import { WallApp } from './wall';
 
 const VIEW_TYPE = 'moss-wall-view';
 const ROOT = 'Moss Wall';
-const IMAGE_TYPES: Record<string, string> = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', webp: 'image/webp', gif: 'image/gif', avif: 'image/avif', bmp: 'image/bmp' };
+const IMAGE_TYPES: Record<string, string> = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', webp: 'image/webp', gif: 'image/gif', avif: 'image/avif', bmp: 'image/bmp', svg: 'image/svg+xml' };
 const MAX_FILE = 25 * 1024 * 1024;
 
 function problem(error: unknown): string { return error instanceof Error ? error.message : String(error); }
@@ -84,6 +84,7 @@ class MossWallView extends FileView {
   private renders = new Set<{ component: Component; nodes: Node[] }>();
   private lifecycle = 0;
   private errorEl: HTMLElement | null = null;
+  private imagePicker: VaultImagePicker | null = null;
 
   constructor(leaf: WorkspaceLeaf, private readonly plugin: MossWallPlugin) {
     super(leaf);
@@ -104,6 +105,7 @@ class MossWallView extends FileView {
   async onClose(): Promise<void> { this.loadToken++; this.disposeUI(); }
   private disposeUI(): void {
     this.lifecycle++;
+    this.imagePicker?.close(); this.imagePicker = null;
     this.wall?.destroy(); this.wall = null;
     for (const { component } of this.renders) component.unload();
     this.renders.clear();
@@ -138,6 +140,7 @@ class MossWallView extends FileView {
         return this.plugin.repository.save(file.path, operation);
       },
       importFiles: files => this.importFiles(files),
+      chooseVaultImages: () => this.chooseVaultImages(),
       resolveAsset: path => {
         const asset = this.app.vault.getAbstractFileByPath(path);
         return asset instanceof TFile ? this.app.vault.getResourcePath(asset) : '';
@@ -173,6 +176,20 @@ class MossWallView extends FileView {
     };
   }
 
+  private async chooseVaultImages(): Promise<Attachment[]> {
+    const sourceFile = this.file;
+    const files = this.app.vault.getFiles().filter(file => IMAGE_TYPES[file.extension.toLowerCase()]).sort((a, b) => b.stat.mtime - a.stat.mtime);
+    if (!files.length) { new Notice('笔记库中还没有图片，可以先添加附件。'); return []; }
+    let picker!: VaultImagePicker;
+    const selected = await new Promise<TFile | null>(resolve => {
+      picker = new VaultImagePicker(this.app, files, resolve); this.imagePicker = picker; picker.open();
+    });
+    if (this.imagePicker === picker) this.imagePicker = null;
+    if (!selected || this.file !== sourceFile) return [];
+    if (this.app.vault.getAbstractFileByPath(selected.path) !== selected) throw new Error('这张图片已被删除，请重新选择。');
+    return [{ path: selected.path, name: selected.name, mime: IMAGE_TYPES[selected.extension.toLowerCase()] }];
+  }
+
   private async importFiles(files: File[]): Promise<Attachment[]> {
     if (!this.file) throw new Error('请先打开看板。');
     if (files.length > 20) throw new Error('一次最多添加 20 个附件，请分批添加。');
@@ -201,6 +218,28 @@ class BoardPicker extends SuggestModal<TFile> {
   getSuggestions(query: string): TFile[] { return this.files.filter(file => file.path.toLocaleLowerCase().includes(query.toLocaleLowerCase())); }
   renderSuggestion(file: TFile, el: HTMLElement): void { el.createDiv({ text: file.basename }); el.createEl('small', { text: file.path }); }
   onChooseSuggestion(file: TFile): void { this.select(file); }
+}
+
+class VaultImagePicker extends SuggestModal<TFile> {
+  constructor(app: App, private files: TFile[], private finish: (file: TFile | null) => void) {
+    super(app); this.setPlaceholder('搜索库内图片（文件名或路径）');
+  }
+  getSuggestions(query: string): TFile[] {
+    const search = query.trim().toLocaleLowerCase();
+    return this.files.filter(file => file.path.toLocaleLowerCase().includes(search));
+  }
+  renderSuggestion(file: TFile, container: HTMLElement): void {
+    const row = container.createDiv({ cls: 'moss-vault-image-option' });
+    const image = row.createEl('img'); image.src = this.app.vault.getResourcePath(file); image.alt = ''; image.loading = 'lazy';
+    image.addEventListener('error', () => { image.hidden = true; });
+    const label = row.createDiv(); label.createDiv({ text: file.name }); label.createEl('small', { text: file.path });
+  }
+  onChooseSuggestion(file: TFile): void { this.finish(file); }
+  onClose(): void {
+    super.onClose();
+    // SuggestModal may close before calling onChooseSuggestion; defer cancellation.
+    queueMicrotask(() => this.finish(null));
+  }
 }
 
 class CreateBoardModal extends Modal {

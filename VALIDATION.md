@@ -1,13 +1,14 @@
-# LinB Kanban 0.2.4 validation
+# LinB Kanban 0.2.5 validation
 
 Date: 2026-09-14.
 
 ## Automated checks
 
 - TypeScript type checking passed.
+- Vault image selection is tested through the compiled plugin entry: name/path search and thumbnails, close-before-selection ordering, original-path reuse without binary writes, duplicate prevention, reload, reference removal preserving the source, cancellation, empty/deleted images and view-unload cleanup.
 - Card-color selection and persistence are covered by the existing create/edit/reopen interaction test.
 - For the local preview theme values, normal text, secondary text and links on the six tinted surfaces meet 4.5:1: minimum 4.60:1 in light mode and 5.84:1 in dark mode. Third-party theme values may differ.
-- All 49 tests passed: 3 Markdown helpers, 14 model, 6 repository, 20 interface and 6 compiled-plugin integration tests.
+- All 52 tests passed: 3 Markdown helpers, 14 model, 6 repository, 20 interface and 9 compiled-plugin integration tests.
 - Plugin and local preview builds passed. The plugin bundle only imports Obsidian; no Node.js or Electron runtime APIs are included.
 - The native `copy-plus` icon was verified in a local Obsidian application distribution. The ribbon callback enters the creation flow.
 - The stable plugin ID, view type, `.moss` schema and storage paths are retained from earlier Moss Wall releases.

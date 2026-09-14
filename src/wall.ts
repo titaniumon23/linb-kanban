@@ -449,7 +449,12 @@ export class WallApp {
     const attachments = el('div', 'moss-editor-attachments');
     const picker = el('input', 'moss-file-input'); picker.type = 'file'; picker.multiple = true; picker.tabIndex = -1; picker.setAttribute('aria-label', '选择图片或附件');
     const addImage = button('添加附件', 'file', 'moss-upload-button', () => picker.click());
-    const uploadHint = el('span', 'moss-upload-hint', '支持图片、文件，也可拖入或粘贴'); const upload = el('div', 'moss-upload'); upload.append(addImage, uploadHint, picker);
+    const chooseImage = button('从库中选图', 'image', 'moss-upload-button moss-vault-pick', () => void chooseExistingImage());
+    chooseImage.disabled = !this.host.chooseVaultImages;
+    if (!this.host.chooseVaultImages) chooseImage.title = '请在 Obsidian 中使用，网页预览无法读取笔记库';
+    const uploadActions = el('div', 'moss-upload-actions'); uploadActions.append(addImage, chooseImage);
+    const uploadHint = el('span', 'moss-upload-hint', this.host.chooseVaultImages ? '上传新文件，或直接引用库内图片' : '支持拖入或粘贴；从库中选图需在 Obsidian 中使用');
+    const upload = el('div', 'moss-upload'); upload.append(uploadActions, uploadHint, picker);
     content.append(this.field('图片与附件', attachments), upload);
     const renderAttachments = () => {
       attachments.replaceChildren(); (draft.attachments || []).forEach((attachment, index) => {
@@ -464,7 +469,20 @@ export class WallApp {
     const cancel = button('取消', undefined, 'moss-button', () => this.requestCloseSheet());
     const save = button(original ? '保存修改' : '添加卡片', 'check', 'moss-button moss-primary', () => void submit());
     footer.append(cancel, save);
-    const setBusy = (busy: boolean, text = '') => { this.setSheetBusy(state, busy); save.disabled = busy; cancel.disabled = busy; addImage.disabled = busy; save.querySelector('span')!.textContent = busy ? text : original ? '保存修改' : '添加卡片'; };
+    const setBusy = (busy: boolean, text = '') => { this.setSheetBusy(state, busy); save.disabled = busy; cancel.disabled = busy; addImage.disabled = busy; chooseImage.disabled = busy || !this.host.chooseVaultImages; save.querySelector('span')!.textContent = busy ? text : original ? '保存修改' : '添加卡片'; };
+    const chooseExistingImage = async () => {
+      if (state.busy || !this.host.chooseVaultImages) return;
+      setBusy(true, '正在选择…'); error.hidden = true;
+      try {
+        const selected = await this.host.chooseVaultImages();
+        if (this.sheet !== state || this.destroyed) return;
+        const known = new Set((draft.attachments || []).map(attachment => attachment.path));
+        for (const attachment of selected) if (!known.has(attachment.path)) { (draft.attachments ||= []).push(attachment); known.add(attachment.path); }
+        renderAttachments();
+      } catch (failure) {
+        if (this.sheet === state) { error.hidden = false; error.textContent = this.errorMessage(failure); }
+      } finally { if (this.sheet === state) { setBusy(false); chooseImage.focus(); } }
+    };
     const importFiles = async (files: File[]) => {
       if (state.busy || !files.length) return;
       setBusy(true, '正在导入…'); error.hidden = true;
