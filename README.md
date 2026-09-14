@@ -22,7 +22,7 @@ The wall adapts from multiple columns to one column in narrow panes. Columns scr
 
 The plugin is being prepared for submission to the Obsidian Community directory. It is not yet listed there.
 
-Unzip the provided installation package and put its `linb-kanban` folder in your vault's `.obsidian/plugins/` folder, then enable **LinB Kanban** in Settings → Community plugins. Obsidian 1.8.7 or newer is required. No public release has been published yet.
+Download the installation ZIP from the [GitHub release](https://github.com/titaniumon23/linb-kanban/releases/latest), unzip it, and put its `linb-kanban` folder in your vault's `.obsidian/plugins/` folder, then enable **LinB Kanban** in Settings → Community plugins. Obsidian 1.8.7 or newer is required.
 
 **Upgrading from 0.2.x:** disable the previous plugin installation first, then install and enable `linb-kanban`. Version 0.3.1 recognizes historical boards directly: they remain visible in the file explorer and in **LinB Kanban: 打开看板**. Opening a historical board does not rewrite it; explicit edits preserve its original format. To create a separate Markdown copy, export it or use **LinB Kanban: 导入旧版看板**. The original file and attachment references remain intact.
 

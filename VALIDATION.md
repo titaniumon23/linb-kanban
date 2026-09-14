@@ -24,4 +24,4 @@ Sharing a Markdown board does not embed image or attachment bytes. Referenced fi
 
 ## Distribution
 
-The local ZIP contains the `linb-kanban/` installation folder. A separate generated demo vault and a standalone Markdown sample are provided. No public GitHub repository, release, or Community-directory submission has been made.
+The local ZIP contains the `linb-kanban/` installation folder. A separate generated demo vault and a standalone Markdown sample are provided. The GitHub release contains the three installation files and an optional installation ZIP. Community-directory acceptance is a separate step; the plugin is not yet listed there.
