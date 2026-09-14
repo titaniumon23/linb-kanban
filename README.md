@@ -20,7 +20,7 @@ The wall adapts from multiple columns to one column in narrow panes. Columns scr
 
 ## Install
 
-The plugin is being prepared for submission to the Obsidian Community directory. It is not yet listed there.
+The [Obsidian Community listing](https://community.obsidian.md/plugins/linb-kanban) is public. Use version **0.3.4 or newer**, which fixes ordinary-note blank panes. If the directory still shows an older version while its release check is running, install the latest GitHub release below.
 
 Download the installation ZIP from the [GitHub release](https://github.com/titaniumon23/linb-kanban/releases/latest), unzip it, and put its `linb-kanban` folder in your vault's `.obsidian/plugins/` folder, then enable **LinB Kanban** in Settings → Community plugins. Obsidian 1.8.7 or newer is required.
 
