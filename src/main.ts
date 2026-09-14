@@ -17,6 +17,7 @@ export default class LinBKanbanPlugin extends Plugin {
   private routing = new WeakSet<WorkspaceLeaf>();
   private stopped = false;
   private routingQueued = false;
+  private routingTimer: ReturnType<typeof setTimeout> | null = null;
   private routingEpoch = 0;
   async onload(): Promise<void> {
     const find = (path: string): TFile => {
@@ -32,7 +33,7 @@ export default class LinBKanbanPlugin extends Plugin {
     // Keep historical board files visible even when unsupported files are hidden.
     try { this.registerExtensions(['moss'], VIEW_TYPE); }
     catch { new Notice('旧版文件显示兼容未能启用，仍可通过“LinB Kanban: 打开看板”访问旧看板。'); }
-    this.register(() => { this.stopped = true; });
+    this.register(() => { this.stopped = true; if (this.routingTimer !== null) clearTimeout(this.routingTimer); });
     const requestRouting = () => { this.routingEpoch++; this.queueRouting(); };
     this.registerEvent(this.app.workspace.on('file-open', requestRouting));
     this.registerEvent(this.app.workspace.on('active-leaf-change', requestRouting));
@@ -106,10 +107,12 @@ export default class LinBKanbanPlugin extends Plugin {
   private queueRouting(): void {
     if (this.stopped || this.routingQueued) return;
     this.routingQueued = true;
-    queueMicrotask(() => {
+    // Workspace events can fire before the host releases its view-loading lock.
+    this.routingTimer = setTimeout(() => {
+      this.routingTimer = null;
       this.routingQueued = false;
       if (!this.stopped) void this.routeOpenNotes();
-    });
+    }, 0);
   }
   private async routeOpenNotes(): Promise<void> {
     if (this.stopped) return;
@@ -149,26 +152,39 @@ class LinBKanbanView extends FileView {
   private lifecycle = 0;
   private errorEl: HTMLElement | null = null;
   private imagePicker: VaultImagePicker | null = null;
+  private redirectTimer: ReturnType<typeof setTimeout> | null = null;
 
   constructor(leaf: WorkspaceLeaf, private readonly plugin: LinBKanbanPlugin) {
     super(leaf);
+    this.register(() => this.disposeUI());
     this.registerEvent(this.app.vault.on('modify', file => { if (file instanceof TFile && file === this.file) void this.refresh(file); }));
   }
   getViewType(): string { return VIEW_TYPE; }
   getDisplayText(): string { return this.file?.basename ?? '看板'; }
   getIcon(): string { return 'copy-plus'; }
-  canAcceptExtension(extension: string): boolean { return extension === 'md' || extension === 'moss'; }
+  // An extension alone cannot distinguish board Markdown from an ordinary note.
+  // Marked Markdown is opened explicitly by the plugin's content-aware routing.
+  canAcceptExtension(extension: string): boolean { return extension === 'moss'; }
 
   async onLoadFile(file: TFile): Promise<void> {
     this.disposeUI();
+    const lifecycle = this.lifecycle;
     this.contentEl.empty();
     this.contentEl.addClass('linb-view');
     let text: string;
     try { text = await this.app.vault.read(file); }
     catch { await this.refresh(file); return; }
-    if (this.file !== file) return;
+    if (this.file !== file || lifecycle !== this.lifecycle) return;
     if (file.extension !== 'moss' && !isBoardMarkdown(text)) {
-      await this.leaf.setViewState({ type: 'markdown', state: { file: file.path } });
+      // Restored workspace state may still assign an ordinary note to this view.
+      // Switching inside onLoadFile is ignored by Obsidian while the leaf is busy.
+      this.contentEl.createEl('p', { text: '正在打开普通笔记…' });
+      this.redirectTimer = setTimeout(() => {
+        this.redirectTimer = null;
+        if (lifecycle !== this.lifecycle || this.file !== file || this.leaf.view !== this) return;
+        void this.leaf.setViewState({ type: 'markdown', state: { file: file.path } })
+          .catch(error => new Notice(problem(error)));
+      }, 0);
       return;
     }
     await this.refresh(file);
@@ -177,6 +193,8 @@ class LinBKanbanView extends FileView {
   async onClose(): Promise<void> { this.loadToken++; this.disposeUI(); }
   private disposeUI(): void {
     this.lifecycle++;
+    if (this.redirectTimer !== null) clearTimeout(this.redirectTimer);
+    this.redirectTimer = null;
     this.imagePicker?.close(); this.imagePicker = null;
     this.wall?.destroy(); this.wall = null;
     for (const { component } of this.renders) component.unload();

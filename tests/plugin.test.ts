@@ -9,7 +9,7 @@ import type { Attachment } from '../src/types';
 
 // Execute the actual bundled entry point, replacing only the host's public API.
 const bundle = buildSync({ entryPoints: [fileURLToPath(new URL('../src/main.ts', import.meta.url))], bundle: true, write: false, platform: 'browser', format: 'cjs', target: 'es2020', external: ['obsidian'] }).outputFiles[0].text;
-const settle = () => new Promise<void>(resolve => setImmediate(resolve));
+const settle = () => new Promise<void>(resolve => setTimeout(() => setImmediate(resolve), 0));
 type EventHandler = (...args: any[]) => void;
 class Events {
   private handlers = new Map<string, Set<EventHandler>>();
@@ -177,11 +177,13 @@ async function fixture(t: TestContext) {
       const leaf = { getViewState: () => state, setViewState: async (next: typeof state) => { state = next; viewStates.push(next); } };
       markdownLeaves.push(leaf); return leaf;
     },
-    async load(file: VaultFile) {
+    async load(file: VaultFile, afterLoad?: (view: any) => void | Promise<void>) {
       const factory = factories.get('linb-kanban-view'); assert.ok(factory);
-      const leaf: any = { app, setViewState: async (state: any) => { viewStates.push(state); }, getViewState: () => ({ type: 'linb-kanban-view', state: { file: file.path } }) };
+      // Obsidian ignores setViewState while another setViewState is loading a file.
+      let loading = true;
+      const leaf: any = { app, setViewState: async (state: any) => { if (!loading) viewStates.push(state); }, getViewState: () => ({ type: 'linb-kanban-view', state: { file: leaf.view.file?.path } }) };
       const view = factory(leaf); leaf.view = view; view.file = file; views.push(view);
-      await view.onLoadFile(file); await settle(); return view;
+      await view.onLoadFile(file); loading = false; await afterLoad?.(view); await settle(); return view;
     },
   };
 }
@@ -212,7 +214,7 @@ test('registered file view loads and saves real UI edits through vault.process, 
   const file = h.vault.seed('LinB Kanban/测试.md', serializeBoard(createBoard('插件集成测试')));
   const view = await h.load(file);
   assert.equal(view.getViewType(), 'linb-kanban-view');
-  assert.equal(view.canAcceptExtension('md'), true);
+  assert.equal(view.canAcceptExtension('md'), false);
   assert.equal(view.canAcceptExtension('json'), false);
   assert.equal(view.canAcceptExtension('moss'), true);
   assert.match(view.contentEl.textContent, /插件集成测试/);
@@ -447,7 +449,7 @@ test('routing handles a tab switching files while its initial read is pending', 
   assert.deepEqual(h.vault.writes, []);
 });
 
-test('ordinary Markdown opened in an existing board pane returns to the native view', async t => {
+test('ordinary notes restored into stale board view states escape after the host loading lock releases', async t => {
   const h = await fixture(t);
   const file = h.vault.seed('普通笔记.md', '# 照常显示');
   await h.load(file);
@@ -606,5 +608,45 @@ test('view event bursts are coalesced and unloading cancels queued routing', asy
   assert.equal(leaf.getViewState().type, 'markdown');
   h.workspace.emit('layout-change'); h.plugin.unload(); await settle();
   assert.equal(reads, 1);
+  assert.deepEqual(h.vault.writes, []);
+});
+
+test('opening an ordinary note from a board pane selects the native Markdown view immediately', async t => {
+  const h = await fixture(t);
+  const board = h.vault.seed('看板.md', serializeBoard(createBoard()));
+  const ordinary = h.vault.seed('普通文档.md', '# 原生笔记');
+  const view = await h.load(board);
+  // WorkspaceLeaf.openFile prefers the current FileView only if it accepts the extension.
+  const nextType = view.canAcceptExtension(ordinary.extension) ? view.getViewType() : 'markdown';
+  assert.equal(nextType, 'markdown');
+  assert.deepEqual(h.vault.writes, []);
+});
+
+test('a deferred ordinary-note redirect is cancelled when the board view closes or changes files', async t => {
+  const h = await fixture(t);
+  const ordinary = h.vault.seed('普通文档.md', '# 保留内容');
+  const board = h.vault.seed('后来打开.md', serializeBoard(createBoard()));
+  await h.load(ordinary, view => view.onClose());
+  await h.load(ordinary, view => view.unload());
+  await h.load(ordinary, async view => {
+    await view.onUnloadFile(); view.file = board; await view.onLoadFile(board);
+  });
+  assert.deepEqual(h.viewStates, []);
+  assert.deepEqual(h.vault.writes, []);
+});
+
+test('routing waits until the host finishes the file-open lifecycle before switching views', async t => {
+  const h = await fixture(t);
+  const file = h.vault.seed('加载中的看板.md', serializeBoard(createBoard()));
+  const leaf = h.note(file);
+  let working = true;
+  const setViewState = leaf.setViewState.bind(leaf);
+  leaf.setViewState = async state => { if (!working) await setViewState(state); };
+  h.workspace.emit('file-open', file);
+  // Core file loading resumes through several Promise continuations before unlocking the leaf.
+  await Promise.resolve(); await Promise.resolve(); await Promise.resolve();
+  working = false;
+  await settle();
+  assert.equal(leaf.getViewState().type, 'linb-kanban-view');
   assert.deepEqual(h.vault.writes, []);
 });

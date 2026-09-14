@@ -1,8 +1,10 @@
-# LinB Kanban 0.3.3 validation
+# LinB Kanban 0.3.4 validation
 
 Date: 2026-09-14.
 
 ## Automated checks
+
+- Reproduced the ordinary-note blank pane with a host fixture that ignores nested view transitions during file loading, matching the installed Obsidian implementation. The board view no longer accepts arbitrary `.md` files by extension. Stale board-state recovery and automatic routing defer transitions until after the file-load event turn; recovery is cancelled on file change, close or unload. Four assertions failed before the fix, and all pass afterward. These checks do not write note contents.
 
 - Six view-routing regressions cover late leaf restoration, activation/layout changes without file-open, sync replacing an open note, stale read caches, an update during an in-flight read, and queued-event cancellation on unload. Four reproductions failed before this correction. Routing is event-driven and coalesced; all cases preserve file contents.
 
@@ -10,7 +12,7 @@ Date: 2026-09-14.
 
 - Fixed the upgrade regression where unsupported historical file types disappeared from the explorer and normal board picker. Historical extensions are registered again; opening is read-only and explicit edits preserve JSON format. Export creates a separate Markdown copy.
 
-- TypeScript checking and all 72 automated tests passed.
+- TypeScript checking and all 75 automated tests passed.
 - Markdown round trips preserve columns/wall layout, global and per-column order, all card colors, empty columns, text, checked tasks, attachments and unknown metadata.
 - Body text is stored once. Source body edits are parsed; stale editors cannot overwrite or delete an externally edited body. Damaged markers and unsupported structural edits are refused without writes.
 - Compiled-plugin host tests cover automatic routing of received Markdown and restored tabs, ordinary-note isolation, file-switch races, unload behavior, creation/export paths, and non-destructive legacy import.

@@ -30,6 +30,8 @@ Download the installation ZIP from the [GitHub release](https://github.com/titan
 
 ## Use
 
+Version 0.3.4 fixes ordinary notes opening as a blank pane from a board tab. Plain Markdown stays in the native editor, and recovery from stale board view states runs after the host finishes loading.
+
 Version 0.3.3 restores board views after delayed tab loading, tab activation, layout changes and sync updates. These checks only select the view and do not rewrite the note.
 
 Click the stacked-pages-plus ribbon icon, or run **LinB Kanban: 新建看板** from the command palette. Enter a name and select **创建**.
