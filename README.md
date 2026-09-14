@@ -9,7 +9,8 @@ The interface is in Chinese. It follows the pane width on desktop, tablet and ph
 - Switch between columns and a wall using the same cards.
 - Write Markdown and view it with Obsidian's native renderer after saving.
 - Add images and other files through the file picker, paste or drag and drop. Images appear on cards; file attachments open in Obsidian.
-- Reorder cards or move them between columns using the drag handle or card menu.
+- Drag the six-dot handle with a mouse, pen or touch to reorder cards or move them between columns, including empty columns. An insertion line shows the destination. Holding near an edge scrolls the board; Escape cancels. The card menu also provides movement actions.
+- Select lines in the card content editor, right-click and choose **转为待办复选框** to convert them to Markdown tasks. Check or uncheck rendered tasks on the card to save their state.
 - Add, rename or remove columns, undo card deletion, and export a board as Markdown.
 - Click the native stacked-pages-plus ribbon icon to create a board.
 
@@ -48,7 +49,9 @@ Removing a card or attachment reference, cancelling an edit, or uninstalling the
 
 LinB Kanban 沿用 Obsidian 的主题颜色和字体，主要提供「栏」和「墙」两种视图。卡片可以写 Markdown、添加图片和其他文件。
 
-侧栏的叠页加号图标直接新建看板。打开已有看板时，在命令面板选择 **LinB Kanban: 打开看板**。点卡片标题编辑，保存后显示 Markdown 排版。通过手柄拖动或卡片菜单移动卡片。
+侧栏的叠页加号图标直接新建看板。打开已有看板时，在命令面板选择 **LinB Kanban: 打开看板**。点卡片标题编辑，保存后显示 Markdown 排版。按住六点手柄可以上下排序、跨栏移动，出现插入线后松开；拖到边缘会自动滚动。也可通过卡片菜单移动。
+
+在卡片编辑框里选中文字，右键选择 **转为待办复选框**。选中多行会逐行转换为 `- [ ]`，保存后可直接勾选，勾选状态写回卡片。
 
 电脑、平板、手机和窄分屏根据实际面板宽度适配；手机的墙为单列，栏可以横向滑动。触屏交互已做模拟测试，尚未在实体手机和平板上验证。
 

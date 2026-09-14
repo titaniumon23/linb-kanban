@@ -147,7 +147,7 @@
 .moss-wall .moss-empty p { max-width: 300px; color: var(--text-muted); }
 .moss-wall .moss-empty small { color: var(--text-muted); font-size: var(--font-ui-smaller, 12px); }
 
-.moss-wall .moss-menu { position: absolute; z-index: 30; width: 208px; max-width: calc(100% - 16px); max-height: min(430px, calc(100% - 16px)); padding: 4px; overflow: auto; border: 1px solid var(--background-modifier-border); border-radius: var(--radius-m, 8px); background: var(--background-secondary); color: var(--text-normal); }
+.moss-wall .moss-menu { position: absolute; z-index: 50; width: 208px; max-width: calc(100% - 16px); max-height: min(430px, calc(100% - 16px)); padding: 4px; overflow: auto; border: 1px solid var(--background-modifier-border); border-radius: var(--radius-m, 8px); background: var(--background-secondary); color: var(--text-normal); }
 .moss-wall .moss-menu-item { display: flex; align-items: center; gap: 8px; width: 100%; min-height: 32px; padding: 6px 8px; text-align: left; }
 .moss-wall .moss-menu-item:hover { background: var(--background-modifier-hover); }
 .moss-wall .moss-menu-label { padding: 8px 8px 4px; color: var(--text-muted); font-size: var(--font-ui-smaller, 12px); }
@@ -247,3 +247,12 @@
 .moss-view > .moss-load-error p { margin: 0 0 8px; overflow-wrap: anywhere; }
 .moss-view > .moss-load-error button { min-height: 44px; padding: 6px 12px; }
 .moss-view > .moss-load-error button:focus-visible { outline: 2px solid var(--interactive-accent); outline-offset: 2px; }
+
+.moss-wall.moss-drag-active { cursor: grabbing; user-select: none; }
+.moss-wall .moss-drop-before::before,
+.moss-wall .moss-drop-after::after { content: ''; position: absolute; left: 0; right: 0; height: 3px; background: var(--interactive-accent); border-radius: 2px; pointer-events: none; }
+.moss-wall .moss-drop-before::before { top: 0; }
+.moss-wall .moss-drop-after::after { bottom: 0; }
+.moss-wall .moss-card-body .task-list-item { list-style: none; }
+.moss-wall .moss-card-body .task-list-item-checkbox { margin-inline: 0 6px; cursor: pointer; }
+.moss-wall .moss-card-body .task-list-item-checkbox:disabled { cursor: wait; }

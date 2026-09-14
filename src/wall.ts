@@ -1,5 +1,6 @@
 import type { Board, BoardOperation, CardPatch, WallCard, WallHost } from './types';
 import { createId, createCard, safeExternalUrl } from './model';
+import { taskifySelection, taskMarkers } from './markdown';
 
 const PATHS: Record<string, string> = {
   plus: 'M12 5v14M5 12h14', close: 'M6 6l12 12M18 6 6 18', search: 'm21 21-5-5M18 10a8 8 0 1 1-16 0 8 8 0 0 1 16 0',
@@ -55,11 +56,12 @@ export class WallApp {
   private menu: HTMLElement | null = null;
   private toastTimer: ReturnType<typeof setTimeout> | undefined;
   private draggedId: string | null = null;
+  private suppressDragClickUntil = 0;
   private destroyed = false;
   private lastFocus: HTMLElement | null = null;
   private lastFocusCardId: string | undefined;
   private menuAnchor: HTMLElement | null = null;
-  private pointerDrag: { id: string; pointerId: number; handle: HTMLElement; article: HTMLElement; startX: number; startY: number; active: boolean; target: Element | null; clientY: number } | null = null;
+  private pointerDrag: { id: string; pointerId: number; handle: HTMLElement; article: HTMLElement; startX: number; startY: number; active: boolean; target: Element | null; clientX: number; clientY: number; scrollTimer?: ReturnType<typeof setTimeout> } | null = null;
 
   constructor(container: HTMLElement, board: Board, host: WallHost) {
     this.board = clone(board); this.host = host;
@@ -142,7 +144,7 @@ export class WallApp {
     if (this.board.layout === 'wall') {
       const wall = el('div', 'moss-grid'); wall.dataset.layout = 'wall'; cards.forEach(card => wall.append(this.renderCard(card, version)));
       wall.addEventListener('dragover', event => { if (this.draggedId && !this.hasFiles(event)) event.preventDefault(); });
-      wall.addEventListener('drop', event => { if (!this.draggedId || this.hasFiles(event)) return; event.preventDefault(); event.stopPropagation(); this.commitDrop(this.draggedId, wall, event.clientY); this.clearDragState(); });
+      wall.addEventListener('drop', event => { if (!this.draggedId || this.hasFiles(event)) return; event.preventDefault(); event.stopPropagation(); this.commitDrop(this.draggedId, wall, event.clientX, event.clientY); this.clearDragState(); });
       this.content.append(wall);
     } else {
       const columns = el('div', 'moss-columns');
@@ -156,7 +158,7 @@ export class WallApp {
         section.append(header, list, add);
         section.addEventListener('dragover', event => { if (this.draggedId || this.hasFiles(event)) { event.preventDefault(); section.classList.add('is-drop-target'); } });
         section.addEventListener('dragleave', event => { if (!section.contains(event.relatedTarget as Node)) section.classList.remove('is-drop-target'); });
-        section.addEventListener('drop', event => { section.classList.remove('is-drop-target'); if (!this.draggedId || this.hasFiles(event)) return; event.preventDefault(); event.stopPropagation(); this.commitDrop(this.draggedId, section, event.clientY); this.clearDragState(); });
+        section.addEventListener('drop', event => { section.classList.remove('is-drop-target'); if (!this.draggedId || this.hasFiles(event)) return; event.preventDefault(); event.stopPropagation(); this.commitDrop(this.draggedId, section, event.clientX, event.clientY); this.clearDragState(); });
         columns.append(section);
       });
       columns.append(button('添加栏', 'plus', 'moss-add-column', () => this.openColumnEditor())); this.content.append(columns);
@@ -182,16 +184,16 @@ export class WallApp {
     const inner = el('div', 'moss-card-inner'); const head = el('div', 'moss-card-head');
     const title = button(card.title || '未命名卡片', undefined, 'moss-card-title', () => this.openEditor(card));
     const more = button(`卡片操作：${card.title || '未命名卡片'}`, 'more', 'moss-icon-button moss-card-more', () => this.openCardMenu(card, more)); more.setAttribute('aria-haspopup', 'menu');
-    const grip = button(`移动卡片：${card.title || '未命名卡片'}`, 'grip', 'moss-icon-button moss-card-grip', () => this.openCardMenu(card, grip)); grip.draggable = true;
+    const grip = button(`移动卡片：${card.title || '未命名卡片'}`, 'grip', 'moss-icon-button moss-card-grip', () => this.openCardMenu(card, grip)); grip.draggable = false;
     grip.setAttribute('aria-haspopup', 'menu'); grip.title = '拖动排序，或点按选择移动位置';
     this.bindPointerDrag(grip, article, card);
     head.append(grip, title, more); inner.append(head);
     if (card.body.trim()) {
-      const body = el('div', 'moss-card-body'); body.addEventListener('dblclick', () => this.openEditor(card));
+      const body = el('div', 'moss-card-body'); body.addEventListener('dblclick', event => { if (!(event.target as Element).closest('input')) this.openEditor(card); });
       const staging = el('div');
       try {
         Promise.resolve(this.host.renderMarkdown(card.body, staging)).then(() => {
-          if (!this.destroyed && version === this.renderVersion && body.isConnected) body.replaceChildren(...Array.from(staging.childNodes));
+          if (!this.destroyed && version === this.renderVersion && body.isConnected) { body.replaceChildren(...Array.from(staging.childNodes)); this.bindTaskCheckboxes(card, body); }
         }).catch(() => { if (!this.destroyed && version === this.renderVersion && body.isConnected) body.textContent = card.body; });
       } catch { body.textContent = card.body; }
       inner.append(body);
@@ -205,92 +207,138 @@ export class WallApp {
     const footer = el('div', 'moss-card-footer'); const column = this.board.columns.find(item => item.id === card.columnId);
     if (column && this.board.layout === 'wall') { footer.append(el('span', 'moss-card-column', column.title)); inner.append(footer); }
     article.append(inner);
-    grip.addEventListener('dragstart', event => { if (this.pointerDrag) { event.preventDefault(); return; } this.closeMenu(); this.draggedId = card.id; event.dataTransfer?.setData('text/plain', card.id); if (event.dataTransfer) { event.dataTransfer.effectAllowed = 'move'; event.dataTransfer.setDragImage(article, 16, 16); } article.classList.add('is-dragging'); });
-    grip.addEventListener('dragend', () => this.clearDragState());
+    grip.addEventListener('dragstart', event => event.preventDefault());
     article.addEventListener('dragover', event => { if (this.draggedId && this.draggedId !== card.id) { event.preventDefault(); event.stopPropagation(); article.classList.add('is-drop-target'); } });
     article.addEventListener('dragleave', event => { if (!article.contains(event.relatedTarget as Node)) article.classList.remove('is-drop-target'); });
     article.addEventListener('drop', event => {
       if (!this.draggedId || this.hasFiles(event)) return;
       event.preventDefault(); event.stopPropagation(); article.classList.remove('is-drop-target');
-      this.commitDrop(this.draggedId, article, event.clientY); this.clearDragState();
+      this.commitDrop(this.draggedId, article, event.clientX, event.clientY); this.clearDragState();
     });
     return article;
   }
 
-  private commitDrop(cardId: string, target: Element, clientY: number): void {
+  private dropPosition(cardId: string, target: Element, clientX: number, clientY: number): { columnId: string; beforeId?: string; marker: HTMLElement; after: boolean } | null {
     const moving = this.board.cards.find(card => card.id === cardId);
-    if (!moving || !this.root.contains(target)) return;
-    const targetCardEl = target.closest<HTMLElement>('.moss-card');
-    const targetCard = this.board.cards.find(card => card.id === targetCardEl?.dataset.cardId);
-    if (targetCard?.id === moving.id) return;
-    const columnId = this.board.layout === 'columns'
-      ? targetCard?.columnId || target.closest<HTMLElement>('.moss-column')?.dataset.columnId
-      : moving.columnId;
-    if (!columnId) return;
-    let beforeId = targetCard?.id;
-    if (targetCard && targetCardEl) {
-      const rect = targetCardEl.getBoundingClientRect();
-      if (clientY > rect.top + rect.height / 2) {
-        const order = this.board.cards.filter(card => card.id !== moving.id && (this.board.layout === 'wall' || card.columnId === columnId));
-        beforeId = order[order.findIndex(card => card.id === targetCard.id) + 1]?.id;
+    if (!moving || !this.root.contains(target)) return null;
+    let targetCardEl = target.closest<HTMLElement>('.moss-card');
+    if (targetCardEl?.dataset.cardId === moving.id) return null;
+    const column = target.closest<HTMLElement>('.moss-column');
+    const columnId = this.board.layout === 'columns' ? column?.dataset.columnId : moving.columnId;
+    if (!columnId) return null;
+    const order = this.board.cards.filter(card => card.id !== moving.id && (this.board.layout === 'wall' || card.columnId === columnId));
+    if (!targetCardEl) {
+      const elements = Array.from((column || this.content).querySelectorAll<HTMLElement>('.moss-card')).filter(node => node.dataset.cardId !== moving.id);
+      if (this.board.layout === 'columns') {
+        targetCardEl = elements.find(node => { const rect = node.getBoundingClientRect(); return clientY <= rect.top + rect.height / 2; }) || null;
+        if (!targetCardEl) return { columnId, marker: elements.at(-1) || column!, after: true };
+      } else {
+        // A gap in a masonry wall belongs to the nearest visible card.
+        const distance = (node: HTMLElement) => { const r = node.getBoundingClientRect(); return Math.hypot(Math.max(r.left - clientX, 0, clientX - r.right), Math.max(r.top - clientY, 0, clientY - r.bottom)); };
+        targetCardEl = elements.sort((a, b) => distance(a) - distance(b))[0] || null;
       }
     }
-    void this.simpleOperation({ type: 'card:move', id: moving.id, columnId, beforeId });
+    if (!targetCardEl) return null;
+    const index = order.findIndex(card => card.id === targetCardEl!.dataset.cardId);
+    if (index < 0) return null;
+    const rect = targetCardEl.getBoundingClientRect();
+    const after = clientY > rect.top + rect.height / 2;
+    return { columnId, beforeId: order[index + (after ? 1 : 0)]?.id, marker: targetCardEl, after };
+  }
+  private commitDrop(cardId: string, target: Element, clientX: number, clientY: number): void {
+    const position = this.dropPosition(cardId, target, clientX, clientY);
+    if (position) void this.simpleOperation({ type: 'card:move', id: cardId, columnId: position.columnId, beforeId: position.beforeId });
   }
 
-  /** Touch dragging is restricted to the handle; the rest of a card scrolls normally. */
+  /** One pointer path works on mouse, pen and touch, including draggable buttons in WebViews. */
   private bindPointerDrag(handle: HTMLElement, article: HTMLElement, card: WallCard): void {
-    let suppressClickUntil = 0;
-    handle.addEventListener('click', event => { if (Date.now() < suppressClickUntil) { event.preventDefault(); event.stopImmediatePropagation(); } }, true);
+    handle.addEventListener('click', event => { if (Date.now() < this.suppressDragClickUntil) { event.preventDefault(); event.stopImmediatePropagation(); } }, true);
     handle.addEventListener('pointerdown', event => {
-      if ((event.pointerType !== 'touch' && event.pointerType !== 'pen') || event.button !== 0 || this.sheet) return;
+      if (event.button !== 0 || event.isPrimary === false || this.sheet) return;
       this.cancelPointerDrag(); this.closeMenu();
-      this.pointerDrag = { id: card.id, pointerId: event.pointerId, handle, article, startX: event.clientX, startY: event.clientY, active: false, target: null, clientY: event.clientY };
+      this.pointerDrag = { id: card.id, pointerId: event.pointerId, handle, article, startX: event.clientX, startY: event.clientY, active: false, target: null, clientX: event.clientX, clientY: event.clientY };
       handle.setPointerCapture?.(event.pointerId);
     });
     handle.addEventListener('pointermove', event => {
       const drag = this.pointerDrag;
       if (!drag || drag.pointerId !== event.pointerId) return;
+      drag.clientX = event.clientX; drag.clientY = event.clientY;
       if (!drag.active && Math.hypot(event.clientX - drag.startX, event.clientY - drag.startY) < 6) return;
-      event.preventDefault(); drag.active = true; this.draggedId = drag.id; article.classList.add('is-dragging');
-      const hit = this.root.ownerDocument.elementFromPoint?.(event.clientX, event.clientY);
-      const list = hit?.closest('.moss-column')?.querySelector<HTMLElement>('.moss-column-list');
-      if (list) {
-        const listRect = list.getBoundingClientRect();
-        if (event.clientY < listRect.top + 40) list.scrollTop -= 12;
-        else if (event.clientY > listRect.bottom - 40) list.scrollTop += 12;
+      event.preventDefault();
+      if (!drag.active) {
+        drag.active = true; this.draggedId = drag.id; article.classList.add('is-dragging'); this.root.classList.add('moss-drag-active');
+        const tick = () => { if (this.pointerDrag !== drag || !drag.active) return; this.updatePointerTarget(true); drag.scrollTimer = setTimeout(tick, 16); };
+        drag.scrollTimer = setTimeout(tick, 16);
       }
-      const contentRect = this.content.getBoundingClientRect();
-      if (event.clientY < contentRect.top + 40) this.content.scrollTop -= 12;
-      else if (event.clientY > contentRect.bottom - 40) this.content.scrollTop += 12;
-      const columns = this.content.querySelector<HTMLElement>('.moss-columns');
-      if (columns) {
-        const rect = columns.getBoundingClientRect();
-        if (event.clientX < rect.left + 40) columns.scrollLeft -= 12;
-        else if (event.clientX > rect.right - 40) columns.scrollLeft += 12;
-      }
-      const target = hit?.closest('.moss-card, .moss-column, .moss-grid') || null;
-      this.root.querySelectorAll('.is-drop-target').forEach(node => node.classList.remove('is-drop-target'));
-      drag.target = target && this.root.contains(target) && target !== article ? target : null; drag.clientY = event.clientY;
-      drag.target?.classList.add('is-drop-target');
+      this.updatePointerTarget(false);
     });
     handle.addEventListener('pointerup', event => {
       const drag = this.pointerDrag;
       if (!drag || drag.pointerId !== event.pointerId) return;
-      if (drag.active) { event.preventDefault(); suppressClickUntil = Date.now() + 400; if (drag.target) this.commitDrop(drag.id, drag.target, drag.clientY); }
+      if (drag.active) {
+        event.preventDefault(); this.suppressDragClickUntil = Date.now() + 400;
+        drag.clientX = event.clientX; drag.clientY = event.clientY; this.updatePointerTarget(false);
+        if (drag.target) this.commitDrop(drag.id, drag.target, drag.clientX, drag.clientY);
+      }
       this.cancelPointerDrag();
     });
-    handle.addEventListener('pointercancel', () => this.cancelPointerDrag());
+    handle.addEventListener('pointercancel', () => { if (this.pointerDrag?.active) this.suppressDragClickUntil = Date.now() + 400; this.cancelPointerDrag(); });
     handle.addEventListener('lostpointercapture', () => this.cancelPointerDrag());
   }
+  private updatePointerTarget(scroll: boolean): void {
+    const drag = this.pointerDrag;
+    if (!drag?.active) return;
+    const { clientX, clientY } = drag;
+    let hit = this.root.ownerDocument.elementFromPoint?.(clientX, clientY);
+    if (scroll && hit && this.root.contains(hit)) {
+      const step = (value: number, start: number, end: number) => value < start + 36 ? -10 : value > end - 36 ? 10 : 0;
+      const list = hit.closest('.moss-column')?.querySelector<HTMLElement>('.moss-column-list');
+      if (list) { const r = list.getBoundingClientRect(); list.scrollTop += step(clientY, r.top, r.bottom); }
+      const r = this.content.getBoundingClientRect(); this.content.scrollTop += step(clientY, r.top, r.bottom);
+      const columns = this.content.querySelector<HTMLElement>('.moss-columns');
+      if (columns) { const r = columns.getBoundingClientRect(); columns.scrollLeft += step(clientX, r.left, r.right); }
+      hit = this.root.ownerDocument.elementFromPoint?.(clientX, clientY);
+    }
+    const target = hit?.closest('.moss-card, .moss-column, .moss-grid') || null;
+    this.root.querySelectorAll('.is-drop-target, .moss-drop-before, .moss-drop-after').forEach(node => node.classList.remove('is-drop-target', 'moss-drop-before', 'moss-drop-after'));
+    drag.target = target && this.root.contains(target) ? target : null;
+    const position = drag.target && this.dropPosition(drag.id, drag.target, clientX, clientY);
+    if (position) position.marker.classList.add(position.marker.classList.contains('moss-card') ? position.after ? 'moss-drop-after' : 'moss-drop-before' : 'is-drop-target');
+  }
   private clearDragState(): void {
-    this.draggedId = null;
-    this.root.querySelectorAll('.is-dragging, .is-drop-target').forEach(node => node.classList.remove('is-dragging', 'is-drop-target'));
+    this.draggedId = null; this.root.classList.remove('moss-drag-active');
+    this.root.querySelectorAll('.is-dragging, .is-drop-target, .moss-drop-before, .moss-drop-after').forEach(node => node.classList.remove('is-dragging', 'is-drop-target', 'moss-drop-before', 'moss-drop-after'));
   }
   private cancelPointerDrag(): void {
-    const drag = this.pointerDrag; this.pointerDrag = null;
+    const drag = this.pointerDrag; this.pointerDrag = null; clearTimeout(drag?.scrollTimer);
+    if (drag?.active) this.suppressDragClickUntil = Date.now() + 400;
     if (drag?.handle.hasPointerCapture?.(drag.pointerId)) drag.handle.releasePointerCapture(drag.pointerId);
     this.clearDragState();
+  }
+
+  private bindTaskCheckboxes(card: WallCard, body: HTMLElement): void {
+    const markers = taskMarkers(card.body);
+    const rendered = Array.from(body.querySelectorAll<HTMLInputElement>('input.task-list-item-checkbox'));
+    rendered.forEach((original, index) => {
+      // Replace host handlers: tasks belong to the card body, never to raw .moss JSON lines.
+      const checkbox = el('input'); checkbox.type = 'checkbox'; checkbox.className = 'task-list-item-checkbox';
+      checkbox.checked = original.checked; checkbox.disabled = rendered.length !== markers.length;
+      checkbox.setAttribute('aria-label', `切换待办 ${index + 1}`); original.replaceWith(checkbox);
+    });
+    body.addEventListener('click', event => {
+      const checkbox = event.target as HTMLInputElement;
+      if (!checkbox.matches('input.task-list-item-checkbox')) return;
+      event.preventDefault(); event.stopImmediatePropagation();
+      if (checkbox.disabled) return;
+      const index = Array.from(body.querySelectorAll('input.task-list-item-checkbox')).indexOf(checkbox);
+      const marker = markers[index]; if (!marker) return;
+      const text = card.body.slice(0, marker.offset) + (marker.checked ? ' ' : 'x') + card.body.slice(marker.offset + 1);
+      body.querySelectorAll<HTMLInputElement>('input.task-list-item-checkbox').forEach(input => { input.disabled = true; });
+      void this.operate({ type: 'card:update', id: card.id, patch: { body: text }, expectedUpdatedAt: card.updatedAt }).catch(error => {
+        if (body.isConnected) body.querySelectorAll<HTMLInputElement>('input.task-list-item-checkbox').forEach(input => { input.disabled = false; });
+        this.showToast(this.errorMessage(error));
+      });
+    }, true);
   }
 
   private openBoardMenu(anchor: HTMLElement): void {
@@ -319,10 +367,10 @@ export class WallApp {
     menu.append(el('div', 'moss-menu-divider')); action('删除卡片', 'trash', () => void this.deleteCard(card), true);
     this.showMenu(menu, anchor);
   }
-  private showMenu(menu: HTMLElement, anchor: HTMLElement): void {
+  private showMenu(menu: HTMLElement, anchor: HTMLElement, point?: { x: number; y: number }): void {
     this.root.append(menu); this.menu = menu; this.menuAnchor = anchor; const rootRect = this.root.getBoundingClientRect(); const rect = anchor.getBoundingClientRect();
-    menu.style.left = `${Math.max(8, Math.min(rect.right - rootRect.left - menu.offsetWidth, rootRect.width - menu.offsetWidth - 8))}px`;
-    menu.style.top = `${Math.max(8, Math.min(rect.bottom - rootRect.top + 5, rootRect.height - menu.offsetHeight - 12))}px`;
+    menu.style.left = `${Math.max(8, Math.min((point ? point.x - rootRect.left : rect.right - rootRect.left - menu.offsetWidth), rootRect.width - menu.offsetWidth - 8))}px`;
+    menu.style.top = `${Math.max(8, Math.min((point ? point.y - rootRect.top : rect.bottom - rootRect.top + 5), rootRect.height - menu.offsetHeight - 12))}px`;
     menu.querySelector<HTMLButtonElement>('button')?.focus();
   }
   private closeMenu(restoreFocus = false): void { this.menu?.remove(); this.menu = null; if (restoreFocus && this.menuAnchor?.isConnected) this.menuAnchor.focus(); this.menuAnchor = null; }
@@ -376,9 +424,23 @@ export class WallApp {
     const { state, content, footer, error } = this.createSheet(original ? '编辑卡片' : '添加卡片', '', () => JSON.stringify(draft) !== initial);
     const title = this.input(draft.title, '标题（可选）'); title.maxLength = 240; title.addEventListener('input', () => { draft.title = title.value; });
     const body = el('textarea', 'moss-input moss-body-input'); body.value = draft.body || ''; body.placeholder = '写点内容…'; body.rows = 8; body.addEventListener('input', () => { draft.body = body.value; });
+    body.addEventListener('contextmenu', event => {
+      if (state.busy || body.selectionStart === body.selectionEnd || !body.value.slice(body.selectionStart, body.selectionEnd).trim()) return;
+      event.preventDefault(); event.stopPropagation(); this.closeMenu();
+      const start = body.selectionStart; const end = body.selectionEnd;
+      const menu = el('div', 'moss-menu'); menu.setAttribute('role', 'menu');
+      const convert = button('转为待办复选框', 'check', 'moss-menu-item', () => {
+        this.closeMenu(true);
+        if (this.sheet !== state || state.busy) return;
+        const converted = taskifySelection(body.value, start, end);
+        if (converted) { body.value = converted.text; draft.body = body.value; body.focus(); body.setSelectionRange(converted.start, converted.end); }
+      });
+      convert.setAttribute('role', 'menuitem'); menu.append(convert);
+      this.showMenu(menu, body, event.clientX || event.clientY ? { x: event.clientX, y: event.clientY } : undefined);
+    });
     const column = el('select', 'moss-input'); this.board.columns.forEach(item => { const option = el('option', '', item.title); option.value = item.id; column.append(option); }); column.value = draft.columnId || ''; column.addEventListener('change', () => { draft.columnId = column.value; });
     const url = this.input(draft.link, 'https://'); url.type = 'url'; url.addEventListener('input', () => { draft.link = url.value; url.removeAttribute('aria-invalid'); });
-    content.append(this.field('标题', title), this.field('内容', body, '支持 Markdown'), this.field('所属分栏', column), this.field('链接（可选）', url));
+    content.append(this.field('标题', title), this.field('内容', body, '支持 Markdown；选中文字后右键可转为待办'), this.field('所属分栏', column), this.field('链接（可选）', url));
     const attachments = el('div', 'moss-editor-attachments');
     const picker = el('input', 'moss-file-input'); picker.type = 'file'; picker.multiple = true; picker.tabIndex = -1; picker.setAttribute('aria-label', '选择图片或附件');
     const addImage = button('添加附件', 'file', 'moss-upload-button', () => picker.click());
@@ -481,6 +543,8 @@ export class WallApp {
   };
   private onOutsidePointer = (event: PointerEvent): void => { if (this.menu && !this.menu.contains(event.target as Node) && !this.menuAnchor?.contains(event.target as Node)) this.closeMenu(); };
   private onKeyDown = (event: KeyboardEvent): void => {
+    if (event.key === 'Escape' && this.pointerDrag) { this.cancelPointerDrag(); event.preventDefault(); return; }
+    if (event.key === 'Tab' && this.menu) { this.closeMenu(true); event.preventDefault(); return; }
     if (event.key === 'Escape') { if (this.menu) { this.closeMenu(true); event.preventDefault(); } else if (this.sheet) { this.requestCloseSheet(); event.preventDefault(); } }
     if (this.menu && ['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) {
       const items = Array.from(this.menu.querySelectorAll<HTMLButtonElement>('button')); const current = items.indexOf(document.activeElement as HTMLButtonElement);

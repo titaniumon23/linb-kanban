@@ -1,16 +1,16 @@
-# LinB Kanban 0.2.2 validation
+# LinB Kanban 0.2.3 validation
 
 Date: 2026-09-14.
 
 ## Automated checks
 
 - TypeScript type checking passed.
-- All 40 existing tests passed: 14 model, 6 repository, 14 interface and 6 compiled-plugin integration tests.
+- All 49 tests passed: 3 Markdown helpers, 14 model, 6 repository, 20 interface and 6 compiled-plugin integration tests.
 - Plugin and local preview builds passed. The plugin bundle only imports Obsidian; no Node.js or Electron runtime APIs are included.
 - The native `copy-plus` icon was verified in a local Obsidian application distribution. The ribbon callback enters the creation flow.
 - The stable plugin ID, view type, `.moss` schema and storage paths are retained from earlier Moss Wall releases.
 
-Coverage includes atomic saves, ordering and cross-column moves, conflict handling, deletion recovery, malformed-file protection, attachment imports, reloads, Markdown exports, simulated touch gestures, focus restoration and scroll preservation.
+Coverage includes atomic saves, ordering and cross-column moves, conflict handling, deletion recovery, malformed-file protection, attachment imports, reloads, Markdown exports, simulated touch gestures, focus restoration and scroll preservation. New regressions cover mouse movement up/down and across columns, empty-column and gap placement, wall sorting, edge scrolling and cancellation, selected-line task conversion, checked-state persistence and safe interception of native Markdown checkbox handlers.
 
 ## Limits
 

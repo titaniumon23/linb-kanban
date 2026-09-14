@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { JSDOM } from 'jsdom';
 import { applyOperation, createBoard, createCard, parseBoard, serializeBoard } from '../src/model';
 import { WallApp } from '../src/wall';
+import { renderPreviewMarkdown } from '../preview/markdown';
 import type { Attachment, Board, BoardOperation, WallHost } from '../src/types';
 
 const settle = () => new Promise<void>(resolve => setImmediate(resolve));
@@ -20,7 +21,7 @@ function sampleBoard(): Board {
   return board;
 }
 
-function fixture(t: TestContext, initial: Board = sampleBoard()) {
+function fixture(t: TestContext, initial: Board = sampleBoard(), renderer?: WallHost['renderMarkdown']) {
   const dom = new JSDOM('<!doctype html><html><body><div id="app"></div></body></html>', { url: 'https://moss.test/' });
   const globals = ['window', 'document', 'Element', 'HTMLElement', 'HTMLDivElement', 'Node', 'File', 'Event', 'KeyboardEvent'] as const;
   const descriptors = new Map(globals.map(name => [name, Object.getOwnPropertyDescriptor(globalThis, name)]));
@@ -51,7 +52,7 @@ function fixture(t: TestContext, initial: Board = sampleBoard()) {
       return files.map(file => ({ path: `附件/${file.name}`, name: file.name, mime: file.type }));
     },
     resolveAsset(path) { return `https://moss.test/${encodeURI(path)}`; },
-    renderMarkdown(text, container) { container.textContent = text; },
+    renderMarkdown: renderer || ((text, container) => { container.textContent = text; }),
     openAttachment(attachment) { opened.push(attachment); }, openLink() {}, async exportMarkdown() {}, createBoard() {}, chooseBoard() {},
   };
   let app = new WallApp(root, parseBoard(stored), host);
@@ -468,9 +469,9 @@ test('card menu supports keyboard dismissal and column moves without requiring d
   assert.equal(h.board().cards.find(item => item.id === moving.id)?.body, moving.body);
 });
 
-function touchPointer(target: HTMLElement, dom: JSDOM, kind: string, clientX: number, clientY: number) {
+function touchPointer(target: HTMLElement, dom: JSDOM, kind: string, clientX: number, clientY: number, pointerType = 'touch') {
   const event = new dom.window.MouseEvent(kind, { button: 0, clientX, clientY, bubbles: true, cancelable: true });
-  Object.defineProperties(event, { pointerId: { value: 7 }, pointerType: { value: 'touch' } });
+  Object.defineProperties(event, { pointerId: { value: 7 }, pointerType: { value: pointerType } });
   target.dispatchEvent(event);
   return event;
 }
@@ -537,4 +538,130 @@ test('editing a scrolled column preserves horizontal and vertical positions afte
   assert.equal(listFor(board.columns[1].id).scrollTop, 92);
   assert.equal(h.board().cards.find(item => item.id === target.id)?.body, '编辑后仍停留在原来浏览的位置。');
   assert.equal(h.dom.window.document.activeElement, button(h.root, target.title));
+});
+
+function bounds(node: HTMLElement, left: number, top: number, width = 260, height = 140) {
+  node.getBoundingClientRect = () => ({ x: left, y: top, left, top, right: left + width, bottom: top + height, width, height, toJSON() {} });
+}
+
+test('mouse handle moves up, down, across columns and into an empty column without native drag events', async t => {
+  const board = sampleBoard(); board.layout = 'columns'; board.cards = board.cards.slice(0, 4);
+  const h = fixture(t, board);
+  const moving = board.cards[1];
+  let hit: HTMLElement;
+  Object.defineProperty(h.dom.window.document, 'elementFromPoint', { configurable: true, value: () => hit });
+  const dragTo = async (target: HTMLElement, x: number, y: number) => {
+    hit = target; const grip = button(h.root, `移动卡片：${moving.title}`);
+    assert.equal(grip.draggable, false);
+    touchPointer(grip, h.dom, 'pointerdown', 30, 50, 'mouse');
+    touchPointer(grip, h.dom, 'pointermove', x, y, 'mouse');
+    assert.ok(h.root.querySelector('.moss-drop-before, .moss-drop-after, .is-drop-target'));
+    touchPointer(grip, h.dom, 'pointerup', x, y, 'mouse');
+    grip.click();
+    assert.equal(h.root.querySelector('[role="menu"]'), null, 'Releasing a drag must not also open its menu');
+    await settle();
+  };
+  let target = card(h.root, board.cards[0].id); bounds(target, 0, 100);
+  await dragTo(target, 30, 110);
+  const order = (id: string) => h.board().cards.filter(item => item.columnId === id).map(item => item.id);
+  assert.deepEqual(order(moving.columnId), [moving.id, board.cards[0].id, board.cards[3].id]);
+  target = card(h.root, board.cards[3].id); bounds(target, 0, 300);
+  await dragTo(target, 30, 420);
+  assert.deepEqual(order(moving.columnId), [board.cards[0].id, board.cards[3].id, moving.id]);
+  target = card(h.root, board.cards[2].id); bounds(target, 300, 100);
+  await dragTo(target, 330, 110);
+  assert.deepEqual(order(board.columns[1].id), [moving.id, board.cards[2].id]);
+  target = h.root.querySelector<HTMLElement>(`[data-column-id="${board.columns[2].id}"]`)!;
+  await dragTo(target, 630, 150);
+  assert.deepEqual(order(board.columns[2].id), [moving.id]);
+  h.reopen();
+  assert.equal(h.board().cards.find(item => item.id === moving.id)?.body, moving.body);
+  assert.equal(card(h.root, moving.id).closest<HTMLElement>('.moss-column')?.dataset.columnId, board.columns[2].id);
+});
+
+test('dropping in a gap between cards inserts at that position instead of appending', async t => {
+  const board = sampleBoard(); board.layout = 'columns';
+  const h = fixture(t, board); const moving = board.cards[2];
+  const ids = [board.cards[0].id, board.cards[1].id, board.cards[3].id];
+  ids.forEach((id, index) => bounds(card(h.root, id), 0, 100 + index * 200));
+  const list = h.root.querySelector<HTMLElement>(`[data-column-id="${board.columns[0].id}"] .moss-column-list`)!;
+  Object.defineProperty(h.dom.window.document, 'elementFromPoint', { configurable: true, value: () => list });
+  const grip = button(h.root, `移动卡片：${moving.title}`);
+  touchPointer(grip, h.dom, 'pointerdown', 330, 100, 'mouse');
+  touchPointer(grip, h.dom, 'pointermove', 30, 270, 'mouse');
+  touchPointer(grip, h.dom, 'pointerup', 30, 270, 'mouse'); await settle();
+  assert.deepEqual(h.board().cards.filter(item => item.columnId === board.columns[0].id).map(item => item.id), [ids[0], moving.id, ids[1], ids[2]]);
+});
+
+test('mouse wall dragging reorders cards and retains their assigned column', async t => {
+  const board = sampleBoard(); const h = fixture(t, board);
+  const moving = board.cards[0], destination = board.cards[2];
+  const target = card(h.root, destination.id); bounds(target, 300, 100);
+  Object.defineProperty(h.dom.window.document, 'elementFromPoint', { configurable: true, value: () => target });
+  const grip = button(h.root, `移动卡片：${moving.title}`);
+  touchPointer(grip, h.dom, 'pointerdown', 30, 50, 'mouse');
+  touchPointer(grip, h.dom, 'pointermove', 330, 230, 'mouse');
+  touchPointer(grip, h.dom, 'pointerup', 330, 230, 'mouse'); await settle();
+  assert.deepEqual(h.board().cards.map(item => item.id), [board.cards[1].id, destination.id, moving.id, board.cards[3].id, board.cards[4].id]);
+  assert.equal(h.board().cards.find(item => item.id === moving.id)?.columnId, moving.columnId);
+});
+
+test('holding a dragged handle near a pane edge scrolls continuously and Escape cancels it', async t => {
+  const board = sampleBoard(); board.layout = 'columns'; const h = fixture(t, board);
+  const target = card(h.root, board.cards[2].id); bounds(target, 200, 50);
+  const columns = h.root.querySelector<HTMLElement>('.moss-columns')!; bounds(columns, 0, 0, 400, 600);
+  const list = target.closest('.moss-column')!.querySelector<HTMLElement>('.moss-column-list')!; bounds(list, 0, 0, 400, 600);
+  bounds(h.root.querySelector<HTMLElement>('.moss-content')!, 0, 0, 400, 600);
+  Object.defineProperty(h.dom.window.document, 'elementFromPoint', { configurable: true, value: () => target });
+  const grip = button(h.root, `移动卡片：${board.cards[0].title}`);
+  touchPointer(grip, h.dom, 'pointerdown', 30, 50, 'mouse');
+  touchPointer(grip, h.dom, 'pointermove', 395, 120, 'mouse');
+  await new Promise(resolve => setTimeout(resolve, 55));
+  assert.ok(columns.scrollLeft >= 20);
+  grip.dispatchEvent(new h.dom.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+  touchPointer(grip, h.dom, 'pointerup', 395, 120, 'mouse');
+  const stopped = columns.scrollLeft;
+  await new Promise(resolve => setTimeout(resolve, 35));
+  assert.equal(columns.scrollLeft, stopped);
+  assert.equal(h.operations.length, 0);
+  assert.equal(h.root.querySelector('.is-dragging, .moss-drop-before, .moss-drop-after'), null);
+});
+
+test('selection context menu converts only chosen lines and task checkboxes save into the card body', async t => {
+  let nativeHandlerCalls = 0;
+  const h = fixture(t, createBoard(), (text, container) => {
+    renderPreviewMarkdown(text, container);
+    container.querySelectorAll('input').forEach(input => input.addEventListener('click', () => { nativeHandlerCalls++; }));
+  });
+  button(h.root.querySelector('.moss-toolbar')!, '添加卡片').click(); await settle();
+  const editor = dialog(h.root); const body = field<HTMLTextAreaElement>(editor, '内容');
+  fill(field(editor, '标题'), '清单'); fill(body, '说明\n1.完成色彩\n2.检查错误\n3.导出');
+  body.focus(); body.setSelectionRange(body.value.indexOf('完成'), body.value.indexOf('3.'));
+  const context = new h.dom.window.MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 100, clientY: 100 });
+  body.dispatchEvent(context); assert.equal(context.defaultPrevented, true);
+  button(h.root.querySelector('[role="menu"]')!, '转为待办复选框').click();
+  assert.equal(body.value, '说明\n- [ ] 完成色彩\n- [ ] 检查错误\n3.导出');
+  assert.equal(h.dom.window.document.activeElement, body);
+  button(editor, '添加卡片').click(); await settle();
+  let inputs = h.root.querySelectorAll<HTMLInputElement>('.moss-card-body input[type=checkbox]');
+  assert.equal(inputs.length, 2); assert.equal(inputs[1].disabled, false);
+  inputs[1].click(); await settle();
+  assert.equal(nativeHandlerCalls, 0, 'Native Markdown checkbox handlers must not write raw .moss lines');
+  assert.equal(h.board().cards[0].body, '说明\n- [ ] 完成色彩\n- [x] 检查错误\n3.导出');
+  h.reopen(); await settle();
+  inputs = h.root.querySelectorAll<HTMLInputElement>('.moss-card-body input[type=checkbox]');
+  assert.deepEqual(Array.from(inputs, input => input.checked), [false, true]);
+  inputs[1].click(); await settle();
+  assert.equal(h.board().cards[0].body, '说明\n- [ ] 完成色彩\n- [ ] 检查错误\n3.导出');
+});
+
+test('a checkbox rendering mismatch cannot update the wrong Markdown source line', async t => {
+  const board = sampleBoard(); board.cards = [board.cards[0]]; board.cards[0].body = '普通正文';
+  const h = fixture(t, board, (_text, container) => {
+    const input = container.ownerDocument.createElement('input'); input.type = 'checkbox'; input.className = 'task-list-item-checkbox'; container.append(input);
+  });
+  await settle();
+  const checkbox = h.root.querySelector<HTMLInputElement>('.task-list-item-checkbox')!;
+  assert.equal(checkbox.disabled, true); checkbox.click(); await settle();
+  assert.equal(h.operations.length, 0); assert.equal(h.board().cards[0].body, '普通正文');
 });

@@ -1,6 +1,7 @@
 import { applyOperation, createBoard, createDemoBoard, createId, exportMarkdown, parseBoard, safeExternalUrl, serializeBoard } from '../src/model';
 import type { Attachment, Board, WallHost } from '../src/types';
 import { WallApp } from '../src/wall';
+import { renderPreviewMarkdown } from './markdown';
 
 const KEY = 'moss-wall-preview-v2';
 const appEl = document.querySelector<HTMLElement>('#app')!;
@@ -36,23 +37,6 @@ function download(contents: string, name: string, type: string): void {
 }
 function persist(next: Board): void { localStorage.setItem(KEY, serializeBoard(next)); board = next; }
 
-function markdown(text: string, container: HTMLElement): void {
-  // Preview-only renderer. The installed plugin uses Obsidian's MarkdownRenderer.
-  for (const line of text.split('\n')) {
-    const heading = /^(#{1,3})\s+(.+)$/.exec(line);
-    const el = document.createElement(heading ? `h${Math.min(heading[1].length + 2, 6)}` : 'p');
-    const value = heading ? heading[2] : line.replace(/^[-*]\s+/, '• ');
-    const tokens = value.split(/(\*\*[^*]+\*\*|\[[^\]]+\]\(https?:\/\/[^)]+\))/g);
-    for (const token of tokens) {
-      const match = /^\[([^\]]+)\]\((.+)\)$/.exec(token);
-      if (token.startsWith('**') && token.endsWith('**')) { const strong = document.createElement('strong'); strong.textContent = token.slice(2, -2); el.append(strong); }
-      else if (match && safeExternalUrl(match[2])) { const link = document.createElement('a'); link.textContent = match[1]; link.href = safeExternalUrl(match[2])!; link.target = '_blank'; link.rel = 'noopener noreferrer'; el.append(link); }
-      else el.append(document.createTextNode(token));
-    }
-    if (!line) el.append(document.createElement('br'));
-    container.append(el);
-  }
-}
 
 const host: WallHost = {
   save: async operation => { const latest = localStorage.getItem(KEY); const next = applyOperation(latest ? parseBoard(latest) : board, operation); persist(next); return board; },
@@ -67,7 +51,7 @@ const host: WallHost = {
     }
     return result;
   },
-  resolveAsset: path => urls.get(path) ?? '', renderMarkdown: markdown,
+  resolveAsset: path => urls.get(path) ?? '', renderMarkdown: renderPreviewMarkdown,
   openAttachment: attachment => { const url = urls.get(attachment.path); if (url) { const a = document.createElement('a'); a.href = url; a.download = attachment.name; a.click(); } },
   openLink: value => { const url = safeExternalUrl(value); if (url) window.open(url, '_blank', 'noopener,noreferrer'); },
   exportMarkdown: async () => download(exportMarkdown(board), `${board.title}.md`, 'text/markdown'),
