@@ -1,8 +1,10 @@
-# LinB Kanban 0.3.1 validation
+# LinB Kanban 0.3.2 validation
 
 Date: 2026-09-14.
 
 ## Automated checks
+
+- Checkbox CSS now reserves a text gutter and positions each box at the center of the first line height. Wrapped lines retain text indentation; the native checkbox size and colors are preserved. This CSS correction has not received full Obsidian visual acceptance.
 
 - Fixed the upgrade regression where unsupported historical file types disappeared from the explorer and normal board picker. Historical extensions are registered again; opening is read-only and explicit edits preserve JSON format. Export creates a separate Markdown copy.
 

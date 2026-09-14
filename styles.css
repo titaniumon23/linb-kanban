@@ -253,8 +253,26 @@
 .linb-kanban .linb-drop-after::after { content: ''; position: absolute; left: 0; right: 0; height: 3px; background: var(--interactive-accent); border-radius: 2px; pointer-events: none; }
 .linb-kanban .linb-drop-before::before { top: 0; }
 .linb-kanban .linb-drop-after::after { bottom: 0; }
-.linb-kanban .linb-card-body .task-list-item { list-style: none; }
-.linb-kanban .linb-card-body .task-list-item-checkbox { margin-inline: 0 6px; cursor: pointer; }
+/* Anchor the checkbox to the first text line, including wrapped and loose lists.
+   Native reading-view offsets do not apply inside this custom file view. */
+.linb-kanban .linb-card-body .task-list-item {
+  --linb-task-checkbox-size: var(--checkbox-size, 16px);
+  position: relative;
+  list-style: none;
+  padding-inline-start: calc(var(--linb-task-checkbox-size) + 6px);
+}
+.linb-kanban .linb-card-body .task-list-item-checkbox {
+  position: absolute;
+  inset-inline-start: 0;
+  top: calc((1.6em - var(--linb-task-checkbox-size)) / 2);
+  top: calc((1lh - var(--linb-task-checkbox-size)) / 2);
+  width: var(--linb-task-checkbox-size);
+  height: var(--linb-task-checkbox-size);
+  margin: 0;
+  padding: 0;
+  transform: none;
+  cursor: pointer;
+}
 .linb-kanban .linb-card-body .task-list-item-checkbox:disabled { cursor: wait; }
 
 /* Optional card tints use the host theme's semantic colors, on its current surface. */
