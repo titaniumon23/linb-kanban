@@ -1,4 +1,4 @@
-export type CardColor = 'white' | 'sage' | 'sand' | 'rose' | 'sky' | 'lavender';
+export type CardColor = 'white' | 'gray' | 'sage' | 'sand' | 'rose' | 'sky' | 'lavender';
 export type BoardBackground = 'paper' | 'sage' | 'rose' | 'slate';
 export type Layout = 'wall' | 'columns';
 export interface Attachment { path: string; name: string; mime: string }

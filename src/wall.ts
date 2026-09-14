@@ -1,4 +1,4 @@
-import type { Board, BoardOperation, CardPatch, WallCard, WallHost } from './types';
+import type { Board, BoardOperation, CardColor, CardPatch, WallCard, WallHost } from './types';
 import { createId, createCard, safeExternalUrl } from './model';
 import { taskifySelection, taskMarkers } from './markdown';
 
@@ -14,6 +14,7 @@ const PATHS: Record<string, string> = {
   folder: 'M3 6h7l2 3h9v11H3zM3 6V4h7l2 2', up: 'm6 14 6-6 6 6', grip: 'M8 5h.01M16 5h.01M8 12h.01M16 12h.01M8 19h.01M16 19h.01',
   file: 'M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8ZM14 2v6h6',
 };
+const CARD_COLORS: [CardColor, string][] = [['white', '默认'], ['gray', '石墨灰'], ['lavender', '淡紫'], ['sky', '雾蓝'], ['sage', '柔绿'], ['sand', '浅橙'], ['rose', '淡粉']];
 let sequence = 0;
 function id(prefix = 'moss'): string { return `${prefix}-${++sequence}-${createId()}`; }
 function el<K extends keyof HTMLElementTagNameMap>(tag: K, cls = '', text = ''): HTMLElementTagNameMap[K] {
@@ -174,7 +175,7 @@ export class WallApp {
   }
 
   private renderCard(card: WallCard, version: number): HTMLElement {
-    const article = el('article', 'moss-card'); article.dataset.cardId = card.id;
+    const article = el('article', 'moss-card'); article.dataset.cardId = card.id; article.dataset.cardColor = card.color;
     const imageAttachment = card.attachments.find(attachment => attachment.mime.startsWith('image/'));
     if (imageAttachment) {
       const cover = button(`打开图片：${imageAttachment.name}`, undefined, 'moss-card-cover', () => this.host.openAttachment(imageAttachment)); cover.replaceChildren();
@@ -439,8 +440,12 @@ export class WallApp {
       this.showMenu(menu, body, event.clientX || event.clientY ? { x: event.clientX, y: event.clientY } : undefined);
     });
     const column = el('select', 'moss-input'); this.board.columns.forEach(item => { const option = el('option', '', item.title); option.value = item.id; column.append(option); }); column.value = draft.columnId || ''; column.addEventListener('change', () => { draft.columnId = column.value; });
+    const color = el('select', 'moss-input moss-color-select');
+    CARD_COLORS.forEach(([value, label]) => { const option = el('option', '', label); option.value = value; color.append(option); });
+    color.value = draft.color || 'white'; color.dataset.cardColor = color.value;
+    color.addEventListener('change', () => { draft.color = color.value as CardColor; color.dataset.cardColor = color.value; });
     const url = this.input(draft.link, 'https://'); url.type = 'url'; url.addEventListener('input', () => { draft.link = url.value; url.removeAttribute('aria-invalid'); });
-    content.append(this.field('标题', title), this.field('内容', body, '支持 Markdown；选中文字后右键可转为待办'), this.field('所属分栏', column), this.field('链接（可选）', url));
+    content.append(this.field('标题', title), this.field('卡片颜色', color), this.field('内容', body, '支持 Markdown；选中文字后右键可转为待办'), this.field('所属分栏', column), this.field('链接（可选）', url));
     const attachments = el('div', 'moss-editor-attachments');
     const picker = el('input', 'moss-file-input'); picker.type = 'file'; picker.multiple = true; picker.tabIndex = -1; picker.setAttribute('aria-label', '选择图片或附件');
     const addImage = button('添加附件', 'file', 'moss-upload-button', () => picker.click());

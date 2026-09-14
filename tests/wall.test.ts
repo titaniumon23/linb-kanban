@@ -133,12 +133,15 @@ test('create and edit a card with text and column, then reopen persisted content
   await settle();
   let editor = dialog(h.root);
   fill(field(editor, '标题'), '周末去看展');
+  fill(field(editor, '卡片颜色'), 'gray');
   fill(field(editor, '内容'), '## 计划\n\n- [ ] 带相机\n- [ ] 写下喜欢的作品');
   fill(field(editor, '所属分栏'), h.board().columns[1].id);
   button(editor, '添加卡片').click();
   await settle();
   assert.equal(h.root.querySelector('[role="dialog"]'), null);
   const added = h.board().cards[0];
+  assert.equal(added.color, 'gray');
+  assert.equal(card(h.root, added.id).dataset.cardColor, 'gray');
   assert.equal(added.title, '周末去看展');
   assert.equal(added.columnId, h.board().columns[1].id);
   assert.match(card(h.root, added.id).textContent!, /带相机/);

@@ -1,6 +1,6 @@
 import type { Attachment, Board, BoardOperation, CardPatch, WallCard } from './types';
 
-const COLORS = new Set(['white', 'sage', 'sand', 'rose', 'sky', 'lavender']);
+const COLORS = new Set(['white', 'gray', 'sage', 'sand', 'rose', 'sky', 'lavender']);
 const BACKGROUNDS = new Set(['paper', 'sage', 'rose', 'slate']);
 const CONTROL_CHARACTERS = /[\u0000-\u001f\u007f]/;
 

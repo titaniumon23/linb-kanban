@@ -256,3 +256,18 @@
 .moss-wall .moss-card-body .task-list-item { list-style: none; }
 .moss-wall .moss-card-body .task-list-item-checkbox { margin-inline: 0 6px; cursor: pointer; }
 .moss-wall .moss-card-body .task-list-item-checkbox:disabled { cursor: wait; }
+
+/* Optional card tints use the host theme's semantic colors, on its current surface. */
+.moss-wall [data-card-color='gray'] { --moss-card-tint: var(--text-muted); }
+.moss-wall [data-card-color='lavender'] { --moss-card-tint: var(--color-purple, var(--interactive-accent)); }
+.moss-wall [data-card-color='sky'] { --moss-card-tint: var(--color-blue, var(--interactive-accent)); }
+.moss-wall [data-card-color='sage'] { --moss-card-tint: var(--color-green, var(--interactive-accent)); }
+.moss-wall [data-card-color='sand'] { --moss-card-tint: var(--color-orange, var(--interactive-accent)); }
+.moss-wall [data-card-color='rose'] { --moss-card-tint: var(--color-pink, var(--color-red, var(--interactive-accent))); }
+.moss-wall :is(.moss-card, .moss-color-select)[data-card-color]:not([data-card-color='white']) {
+  background: color-mix(in srgb, var(--moss-card-tint) 10%, var(--background-primary));
+  border-color: color-mix(in srgb, var(--moss-card-tint) 30%, var(--background-modifier-border));
+}
+.moss-wall .moss-card[data-card-color]:not([data-card-color='white']):hover { border-color: color-mix(in srgb, var(--moss-card-tint) 50%, var(--background-modifier-border-hover, var(--background-modifier-border))); }
+.moss-wall .moss-color-select:focus { border-color: var(--interactive-accent); }
+.moss-wall .moss-color-select option { color: var(--text-normal); background: var(--background-primary); }
