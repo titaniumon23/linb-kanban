@@ -27,6 +27,9 @@ export default class LinBKanbanPlugin extends Plugin {
       process: (path, update) => this.app.vault.process(find(path), update),
     });
     this.registerView(VIEW_TYPE, leaf => new LinBKanbanView(leaf, this));
+    // Keep historical board files visible even when unsupported files are hidden.
+    try { this.registerExtensions(['moss'], VIEW_TYPE); }
+    catch { new Notice('旧版文件显示兼容未能启用，仍可通过“LinB Kanban: 打开看板”访问旧看板。'); }
     this.register(() => { this.stopped = true; });
     this.registerEvent(this.app.workspace.on('file-open', () => { void this.routeOpenNotes(); }));
     this.app.workspace.onLayoutReady(() => { void this.routeOpenNotes(); });
@@ -36,7 +39,7 @@ export default class LinBKanbanPlugin extends Plugin {
     this.addCommand({ id: 'create-demo-board', name: '创建示例看板', callback: () => { void this.writeDemo().catch(e => new Notice(problem(e))); } });
     this.addCommand({ id: 'import-legacy-board', name: '导入旧版看板', callback: () => this.importLegacyBoard() });
     this.registerEvent(this.app.workspace.on('file-menu', (menu, file) => {
-      if (file instanceof TFile && this.app.metadataCache.getFileCache(file)?.frontmatter?.['linb-kanban'] === 1) menu.addItem(item => item.setTitle('用看板打开').setIcon('copy-plus').onClick(() => { void this.openBoard(file); }));
+      if (file instanceof TFile && (file.extension === 'moss' || this.app.metadataCache.getFileCache(file)?.frontmatter?.['linb-kanban'] === 1)) menu.addItem(item => item.setTitle('用看板打开').setIcon('copy-plus').onClick(() => { void this.openBoard(file); }));
     }));
   }
 
@@ -72,6 +75,7 @@ export default class LinBKanbanPlugin extends Plugin {
   async chooseBoard(): Promise<void> {
     const files: TFile[] = [];
     for (const file of this.app.vault.getFiles()) {
+      if (file.extension === 'moss') { files.push(file); continue; }
       if (file.extension !== 'md') continue;
       try { if (isBoardMarkdown(await this.app.vault.cachedRead(file))) files.push(file); }
       catch { /* A note may be removed while the picker is opening. */ }
@@ -82,7 +86,7 @@ export default class LinBKanbanPlugin extends Plugin {
     new BoardPicker(this.app, files, file => { void this.openBoard(file).catch(e => new Notice(problem(e))); }).open();
   }
   private importLegacyBoard(): void {
-    // Historical extension is read only, never registered or used for new files.
+    // Explicit conversion creates a separate Markdown copy; the original stays intact.
     const files = this.app.vault.getFiles().filter(file => ['moss', 'json'].includes(file.extension));
     if (!files.length) { new Notice('请先把旧版看板文件放入当前笔记库，再运行此命令。'); return; }
     new BoardPicker(this.app, files, file => {
@@ -135,7 +139,7 @@ class LinBKanbanView extends FileView {
   getViewType(): string { return VIEW_TYPE; }
   getDisplayText(): string { return this.file?.basename ?? '看板'; }
   getIcon(): string { return 'copy-plus'; }
-  canAcceptExtension(extension: string): boolean { return extension === 'md'; }
+  canAcceptExtension(extension: string): boolean { return extension === 'md' || extension === 'moss'; }
 
   async onLoadFile(file: TFile): Promise<void> {
     this.disposeUI();
@@ -145,7 +149,7 @@ class LinBKanbanView extends FileView {
     try { text = await this.app.vault.read(file); }
     catch { await this.refresh(file); return; }
     if (this.file !== file) return;
-    if (!isBoardMarkdown(text)) {
+    if (file.extension !== 'moss' && !isBoardMarkdown(text)) {
       await this.leaf.setViewState({ type: 'markdown', state: { file: file.path } });
       return;
     }

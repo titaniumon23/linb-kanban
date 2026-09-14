@@ -11,5 +11,5 @@ await cp(`test-vault-${version}`, experience, { recursive: true });
 await cp('dist/linb-kanban', `${experience}/.obsidian/plugins/linb-kanban`, { recursive: true });
 await writeFile(`${experience}/使用说明.md`, '# LinB Kanban 体验库\n\n这是一个独立体验库，包含插件和示例卡片。\n\n用 Obsidian 的“打开本地仓库”打开此文件夹。如需启用插件，请在 设置 → 第三方插件 中启用 LinB Kanban，然后打开 LinB Kanban 文件夹里的 .md 文件。\n\n需要在自己的库中使用时，把安装包里的 linb-kanban 文件夹放入你的库/.obsidian/plugins/，再启用。\n\n此库只含生成的示例内容，不含你的私人笔记。\n');
 execFileSync('python3', ['scripts/zip.py', experience, `artifacts/LinB-Kanban-体验库-${version}.zip`]);
-await writeFile('artifacts/安装说明.txt', `LinB Kanban ${version}\n\n将压缩包里的 linb-kanban 文件夹放入你的笔记库/.obsidian/plugins/\n从 0.2.x 升级时请先停用旧插件；旧看板通过命令“LinB Kanban: 导入旧版看板”转换，原文件保留。\n重新加载 Obsidian，在 设置 → 第三方插件 中启用 LinB Kanban。\n命令面板搜索“LinB Kanban”，选择“新建看板”或“创建示例看板”。\n\n数据保存在笔记库的 LinB Kanban 文件夹。完整说明见插件文件夹里的 使用说明.md。\n`);
+await writeFile('artifacts/安装说明.txt', `LinB Kanban ${version}\n\n将压缩包里的 linb-kanban 文件夹放入你的笔记库/.obsidian/plugins/\n从 0.2.x 升级时请先停用旧插件；旧看板可直接打开；需要 Markdown 副本时再导出或导入，原文件保留。\n重新加载 Obsidian，在 设置 → 第三方插件 中启用 LinB Kanban。\n命令面板搜索“LinB Kanban”，选择“新建看板”或“创建示例看板”。\n\n数据保存在笔记库的 LinB Kanban 文件夹。完整说明见插件文件夹里的 使用说明.md。\n`);
 console.log(`Created artifacts/linb-kanban-${version}.zip`);

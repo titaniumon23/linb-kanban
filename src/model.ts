@@ -155,7 +155,7 @@ export function isBoardMarkdown(text: string): boolean {
 }
 
 export function parseBoard(text: string): Board {
-  // Read-only compatibility for importing earlier JSON boards.
+  // Earlier JSON boards remain readable; repository saves preserve their format.
   if (text.trimStart().startsWith('{')) {
     let value: unknown;
     try { value = JSON.parse(text); }

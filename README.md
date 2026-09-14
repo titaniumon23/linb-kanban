@@ -24,7 +24,9 @@ The plugin is being prepared for submission to the Obsidian Community directory.
 
 Unzip the provided installation package and put its `linb-kanban` folder in your vault's `.obsidian/plugins/` folder, then enable **LinB Kanban** in Settings → Community plugins. Obsidian 1.8.7 or newer is required. No public release has been published yet.
 
-**Upgrading from 0.2.x:** disable the previous plugin installation first. Version 0.3.0 uses the new plugin ID and installation folder `linb-kanban`. Install and enable this new folder, then run **LinB Kanban: 导入旧版看板** to select an earlier board already in your vault. Import creates a new Markdown board and keeps the original board and attachments. Do not rename an old JSON file to `.md`; use the import command. Once installed under the new ID, later updates replace the three runtime files in the same folder.
+**Upgrading from 0.2.x:** disable the previous plugin installation first, then install and enable `linb-kanban`. Version 0.3.1 recognizes historical boards directly: they remain visible in the file explorer and in **LinB Kanban: 打开看板**. Opening a historical board does not rewrite it; explicit edits preserve its original format. To create a separate Markdown copy, export it or use **LinB Kanban: 导入旧版看板**. The original file and attachment references remain intact.
+
+**Upgrading from 0.3.0:** replace only `main.js`, `manifest.json` and `styles.css` in `.obsidian/plugins/linb-kanban/`, then reload the plugin. This fixes old boards being hidden when Obsidian's “show unsupported files” option is off. Do not delete board or attachment folders while updating.
 
 ## Use
 
@@ -65,7 +67,7 @@ LinB Kanban 沿用 Obsidian 的主题颜色和字体，主要提供「栏」和�
 
 电脑、平板、手机和窄分屏根据实际面板宽度适配；手机的墙为单列，栏可以横向滑动。触屏交互已做模拟测试，尚未在实体手机和平板上验证。
 
-**0.3.0 升级：**先停用旧版插件，把新安装包里的 `linb-kanban` 文件夹放入笔记库的 `.obsidian/plugins/`，重新加载并启用 LinB Kanban。命令面板运行 **LinB Kanban: 导入旧版看板**，选择当前库里的旧看板，即可生成新版 `.md`；原文件和附件不会被删除或改名。
+**0.3.1 修复：**旧格式看板可以直接在文件列表和「打开看板」中找到，不再要求先转换。打开不会改写原文件；编辑仍保存为原格式。需要 Markdown 副本时，可导出或运行 **LinB Kanban: 导入旧版看板**。从 0.3.0 更新，只替换安装目录中的三个插件文件，再重新加载插件；不要删除看板和附件目录。
 
 **分享看板：**现在新建和导出都使用 `.md`。对方安装并启用 LinB Kanban 0.3.0 或更新版本，打开文件就会显示保存的栏或墙；没有插件也能阅读 Markdown。请发送完整文件，不要只复制可见文字。纯文字看板发 `.md` 即可；有图片或文件时，需要把所引用的附件一起发送，保持它们及看板相对笔记库根目录的文件夹结构。
 

@@ -200,7 +200,7 @@ function fill(root: ParentNode, label: string, value: string) {
 test('compiled plugin registers its file view, extension, commands and ribbon without creating demo content', async t => {
   const h = await fixture(t);
   assert.deepEqual(Array.from(h.factories.keys()), ['linb-kanban-view']);
-  assert.deepEqual(h.extensions, []);
+  assert.deepEqual(h.extensions, [{ extensions: ['moss'], type: 'linb-kanban-view' }]);
   assert.deepEqual(h.commands.map(command => command.id), ['open-board', 'create-board', 'create-demo-board', 'import-legacy-board']);
   assert.deepEqual(h.ribbons, [{ icon: 'copy-plus', title: '新建看板' }]);
   assert.deepEqual(h.vault.writes, []);
@@ -214,6 +214,7 @@ test('registered file view loads and saves real UI edits through vault.process, 
   assert.equal(view.getViewType(), 'linb-kanban-view');
   assert.equal(view.canAcceptExtension('md'), true);
   assert.equal(view.canAcceptExtension('json'), false);
+  assert.equal(view.canAcceptExtension('moss'), true);
   assert.match(view.contentEl.textContent, /插件集成测试/);
   assert.equal(h.vault.writes.length, 0);
   button(view.contentEl.querySelector('.linb-toolbar')!, '添加卡片').click();
@@ -487,4 +488,41 @@ test('legacy import creates a new Markdown board without changing the old board 
   assert.equal(h.vault.text.get(asset.path), 'image');
   assert.deepEqual(parseBoard(h.vault.text.get('LinB Kanban/旧看板.md')!), board);
   assert.equal(h.vault.writes.filter(write => write.kind === 'binary' || write.kind === 'process').length, 0);
+});
+
+test('upgrading exposes historical boards in the normal picker without requiring conversion or file rewrites', async t => {
+  const h = await fixture(t);
+  const board = createBoard('历史看板');
+  board.cards.push(createCard(board.columns[0].id, { title: '保留的内容', body: '**重要文字**' }));
+  const original = JSON.stringify(board, null, 2);
+  const legacy = h.vault.seed('旧目录/历史看板.moss', original);
+  const modern = h.vault.seed('LinB Kanban/新看板.md', serializeBoard(createBoard()));
+  h.vault.seed('普通笔记.md', '# 普通内容');
+  await h.commands.find(command => command.id === 'open-board')!.callback();
+  const picker = h.modals.at(-1);
+  assert.deepEqual(new Set(picker.getSuggestions('')), new Set([legacy, modern]));
+  assert.ok(h.extensions.some(entry => entry.extensions.includes('moss')));
+  const view = await h.load(legacy);
+  assert.match(view.contentEl.textContent, /保留的内容/);
+  assert.match(view.contentEl.textContent, /重要文字/);
+  assert.equal(h.vault.text.get(legacy.path), original);
+  assert.deepEqual(h.vault.writes, []);
+});
+
+test('editing historical boards preserves their JSON format, while export creates a separate Markdown copy', async t => {
+  const h = await fixture(t);
+  const board = createBoard('旧格式');
+  board.cards.push(createCard(board.columns[0].id, { title: '继续编辑', body: '原有内容' }));
+  const file = h.vault.seed('旧格式.moss', JSON.stringify(board));
+  const view = await h.load(file);
+  button(view.contentEl, '继续编辑').click();
+  const editor = view.contentEl.querySelector('[role="dialog"]')!;
+  fill(editor, '内容', '保存到原格式'); button(editor, '保存修改').click(); await settle();
+  const saved = h.vault.text.get(file.path)!;
+  assert.equal(JSON.parse(saved).cards[0].body, '保存到原格式');
+  assert.equal(JSON.parse(saved).cards[0].id, board.cards[0].id);
+  button(view.contentEl, '更多操作').click();
+  button(view.contentEl.querySelector('[role="menu"]')!, '导出为 Markdown').click(); await settle();
+  assert.equal(h.vault.text.get(file.path), saved);
+  assert.deepEqual(parseBoard(h.vault.text.get('旧格式 - 导出.md')!), JSON.parse(saved));
 });

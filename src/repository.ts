@@ -14,7 +14,12 @@ export class BoardRepository {
   save(path: string, operation: BoardOperation): Promise<Board> {
     const previous = this.pending.get(path) ?? Promise.resolve();
     const next = previous.catch(() => undefined).then(async () => {
-      const saved = await this.io.process(path, current => serializeBoard(applyOperation(parseBoard(current), operation), path.split('/').slice(0, -1).join('/')));
+      const saved = await this.io.process(path, current => {
+        const board = applyOperation(parseBoard(current), operation);
+        // Opening a historical file never changes its format or path.
+        return path.endsWith('.moss') ? `${JSON.stringify(board, null, 2)}\n`
+          : serializeBoard(board, path.split('/').slice(0, -1).join('/'));
+      });
       return parseBoard(saved);
     });
     this.pending.set(path, next);
