@@ -1,0 +1,15 @@
+import { mkdir, copyFile, readFile, writeFile, cp } from 'node:fs/promises';
+import { execFileSync } from 'node:child_process';
+await copyFile('README.md', 'dist/moss-wall/使用说明.md');
+await copyFile('LICENSE', 'dist/moss-wall/LICENSE');
+await copyFile('VALIDATION.md', 'dist/moss-wall/VALIDATION.md');
+const { version } = JSON.parse(await readFile('manifest.json', 'utf8'));
+await mkdir('artifacts', { recursive: true });
+execFileSync('python3', ['scripts/zip.py', 'dist/moss-wall', `artifacts/linb-kanban-${version}.zip`]);
+const experience = `dist/LinB Kanban 体验库 ${version}`;
+await cp(`test-vault-${version}`, experience, { recursive: true });
+await cp('dist/moss-wall', `${experience}/.obsidian/plugins/moss-wall`, { recursive: true });
+await writeFile(`${experience}/使用说明.md`, '# LinB Kanban 体验库\n\n这是一个独立体验库，包含插件和示例卡片。\n\n用 Obsidian 的“打开本地仓库”打开此文件夹。如需启用插件，请在 设置 → 第三方插件 中启用 LinB Kanban，然后打开 Moss Wall 文件夹里的 .moss 文件。\n\n需要在自己的库中使用时，把安装包里的 moss-wall 文件夹放入你的库/.obsidian/plugins/，再启用。\n\n此库只含生成的示例内容，不含你的私人笔记。\n');
+execFileSync('python3', ['scripts/zip.py', experience, `artifacts/LinB-Kanban-体验库-${version}.zip`]);
+await writeFile('artifacts/安装说明.txt', `LinB Kanban ${version}\n\n将压缩包里的 moss-wall 文件夹放入你的笔记库/.obsidian/plugins/\n重新加载 Obsidian，在 设置 → 第三方插件 中启用 LinB Kanban。\n命令面板搜索“LinB Kanban”，选择“新建看板”或“创建示例看板”。\n\n数据保存在笔记库的 Moss Wall 文件夹。完整说明见插件文件夹里的 使用说明.md。\n`);
+console.log(`Created artifacts/linb-kanban-${version}.zip`);

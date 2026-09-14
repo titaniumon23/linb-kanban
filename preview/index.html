@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>LinB Kanban — 栏 / 墙</title><link rel="stylesheet" href="styles.css">
+  <style>
+    /* Preview only: installed plugin inherits the active Obsidian theme. */
+    :root {
+      --font-interface:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
+      --font-text:var(--font-interface); --font-monospace:ui-monospace,monospace;
+      --font-ui-smaller:12px; --font-ui-small:13px; --font-ui-medium:15px; --font-text-size:16px;
+      --font-normal:400; --font-medium:500; --font-semibold:600; --line-height-normal:1.5;
+      --background-primary:#fff; --background-primary-alt:#fafafa; --background-secondary:#f6f6f6; --background-secondary-alt:#eee;
+      --background-modifier-border:#e0e0e0; --background-modifier-border-hover:#ccc; --background-modifier-border-focus:#a8a8a8;
+      --background-modifier-hover:rgba(0,0,0,.055); --background-modifier-active-hover:rgba(0,0,0,.085); --background-modifier-form-field:#fff;
+      --background-modifier-cover:rgba(0,0,0,.35); --background-modifier-error:#ffe4e4; --background-modifier-error-hover:#ffd2d2;
+      --text-normal:#222; --text-muted:#5c5c5c; --text-faint:#707070; --text-error:#b52c2c; --text-on-accent:#fff; --text-accent:#7852d4; --text-accent-hover:#6841c4;
+      --interactive-normal:#f3f3f3; --interactive-hover:#e8e8e8; --interactive-accent:#7852d4; --interactive-accent-hover:#6d49c4;
+      --color-accent:#7852d4; --color-red:#c53939; --icon-color:var(--text-muted); --icon-color-hover:var(--text-normal);
+      --input-radius:5px; --button-radius:5px; --input-height:30px; --radius-s:4px; --radius-m:8px; --radius-l:12px;
+      --shadow-s:0 2px 8px rgba(0,0,0,.12); --shadow-l:0 8px 30px rgba(0,0,0,.2); --modal-background:var(--background-primary);
+    }
+    body.theme-dark {
+      --background-primary:#1e1e1e; --background-primary-alt:#242424; --background-secondary:#262626; --background-secondary-alt:#303030;
+      --background-modifier-border:#3a3a3a; --background-modifier-border-hover:#505050; --background-modifier-border-focus:#707070;
+      --background-modifier-hover:rgba(255,255,255,.075); --background-modifier-active-hover:rgba(255,255,255,.12); --background-modifier-form-field:#242424;
+      --background-modifier-cover:rgba(0,0,0,.55); --background-modifier-error:#472323; --background-modifier-error-hover:#573030;
+      --text-normal:#dadada; --text-muted:#b5b5b5; --text-faint:#999; --text-error:#ff9292; --text-accent:#b399ff; --text-accent-hover:#c4b0ff;
+      --interactive-normal:#363636; --interactive-hover:#424242; --interactive-accent:#8b6cef; --interactive-accent-hover:#9b7cf7;
+      --color-accent:#8b6cef; --color-red:#ff9292;
+    }
+    * { box-sizing:border-box; }
+    body { margin:0; font-family:var(--font-interface); color:var(--text-normal); background:var(--background-secondary); }
+    .preview-strip { min-height:40px; display:flex; flex-wrap:wrap; gap:8px; align-items:center; padding:5px 12px; font-size:12px; border-bottom:1px solid var(--background-modifier-border); }
+    .preview-strip > span { margin-right:auto; color:var(--text-muted); }
+    .preview-strip :is(button,select) { border:1px solid var(--background-modifier-border); border-radius:var(--input-radius); background:var(--interactive-normal); color:var(--text-normal); cursor:pointer; font:inherit; padding:4px 8px; min-height:28px; }
+    .preview-strip :is(button,select):focus-visible { outline:2px solid var(--interactive-accent); outline-offset:2px; }
+    #preview-shell { height:calc(100dvh - var(--preview-bar-height,40px)); display:flex; justify-content:center; overflow:hidden; }
+    #app { width:100%; max-width:var(--preview-width,100%); height:100%; min-width:0; background:var(--background-primary); }
+    .preview-failure { margin:24px; max-width:65ch; }
+    @media(pointer:coarse) { .preview-strip :is(button,select) { min-height:44px; } }
+  </style>
+</head>
+<body><div class="preview-strip"><span>预览 · 示例内容</span><select id="device" aria-label="预览设备"><option value="auto">电脑 / 自适应</option><option value="768">平板 · 768</option><option value="390">手机 · 390</option><option value="320">窄屏 · 320</option></select><button id="theme">深浅色</button><button id="reset">重置示例</button></div><div id="preview-shell"><main id="app"></main></div><script src="app.js"></script></body>
+</html>

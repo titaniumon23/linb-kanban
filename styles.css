@@ -1,0 +1,249 @@
+/* The board inherits Obsidian's theme, font and control colors.
+   Layout responds to its pane, including split panes on desktop. */
+.moss-wall {
+  position: relative;
+  isolation: isolate;
+  container: moss / inline-size;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  color: var(--text-normal);
+  background: var(--background-primary);
+  font-family: var(--font-interface);
+  font-size: var(--font-ui-small, 14px);
+  line-height: var(--line-height-normal, 1.5);
+}
+.moss-wall *,
+.moss-wall *::before,
+.moss-wall *::after { box-sizing: border-box; }
+.moss-wall [hidden] { display: none !important; }
+.moss-wall :is(button, input, textarea, select) { font: inherit; letter-spacing: inherit; }
+.moss-wall button {
+  appearance: none;
+  -webkit-appearance: none;
+  height: auto;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-s, 4px);
+  background: transparent;
+  color: inherit;
+  box-shadow: none;
+  cursor: pointer;
+  text-transform: none;
+}
+.moss-wall button:hover { box-shadow: none; }
+.moss-wall button:disabled { cursor: not-allowed; opacity: .5; }
+.moss-wall [aria-busy='true'] { cursor: wait; }
+.moss-wall :is(button, a, input, textarea, select):focus-visible {
+  outline: 2px solid var(--interactive-accent);
+  outline-offset: 2px;
+}
+.moss-wall svg { display: block; flex: 0 0 auto; width: 16px; height: 16px; pointer-events: none; }
+.moss-wall :is(p, h1, h2) { margin: 0; padding: 0; }
+.moss-wall .moss-body { display: flex; flex-direction: column; height: 100%; min-width: 0; min-height: 0; overflow: hidden; }
+
+/* One small toolbar keeps the content at the center of the pane. */
+.moss-wall .moss-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 0 0 auto;
+  min-width: 0;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--background-modifier-border);
+}
+.moss-wall .moss-title-button {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 4px 0;
+  overflow: hidden;
+  text-align: left;
+}
+.moss-wall .moss-title { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--font-ui-medium, 15px); font-weight: var(--font-semibold, 600); }
+.moss-wall .moss-title-button:hover { color: var(--text-accent); }
+.moss-wall .moss-modes { display: flex; align-items: center; gap: 2px; flex: 0 0 auto; }
+.moss-wall .moss-mode { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 32px; padding: 6px 10px; color: var(--text-muted); white-space: nowrap; }
+.moss-wall .moss-mode:hover { background: var(--background-modifier-hover); color: var(--text-normal); }
+.moss-wall .moss-mode[aria-pressed='true'] { background: var(--background-modifier-active-hover, var(--background-modifier-hover)); color: var(--text-normal); }
+.moss-wall .moss-mode svg { width: 15px; height: 15px; }
+.moss-wall .moss-toolbar-actions { display: flex; align-items: center; gap: 6px; flex: 0 0 auto; min-width: 0; }
+.moss-wall .moss-icon-button { display: inline-flex; align-items: center; justify-content: center; flex: 0 0 30px; width: 30px; height: 30px; color: var(--text-muted); }
+.moss-wall .moss-icon-button:hover { color: var(--text-normal); background: var(--background-modifier-hover); }
+.moss-wall .moss-button { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 32px; padding: 6px 12px; border: 1px solid var(--background-modifier-border); border-radius: var(--button-radius, var(--radius-s, 4px)); background: var(--interactive-normal); color: var(--text-normal); white-space: nowrap; }
+.moss-wall .moss-button:hover { background: var(--interactive-hover); }
+.moss-wall .moss-primary { border-color: transparent; background: var(--interactive-accent); color: var(--text-on-accent); }
+.moss-wall .moss-primary:hover { background: var(--interactive-accent-hover); color: var(--text-on-accent); }
+.moss-wall .moss-save-status { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.moss-wall .moss-save-status:is([data-state='saving'], [data-state='error']) { z-index: 35; bottom: 12px; left: 12px; width: auto; height: auto; max-width: calc(100% - 24px); padding: 6px 10px; border: 1px solid var(--background-modifier-border); border-radius: var(--radius-s, 4px); clip-path: none; background: var(--background-secondary); color: var(--text-muted); font-size: var(--font-ui-smaller, 12px); white-space: normal; overflow-wrap: anywhere; }
+.moss-wall .moss-save-status[data-state='error'] { color: var(--text-error); }
+
+.moss-wall .moss-content { flex: 1 1 auto; min-width: 0; min-height: 0; padding: 16px; overflow: auto; overscroll-behavior: contain; }
+.moss-wall .moss-grid { columns: 260px; column-gap: 12px; }
+.moss-wall .moss-card { display: inline-block; position: relative; width: 100%; min-width: 0; margin: 0 0 12px; border: 1px solid var(--background-modifier-border); border-radius: var(--radius-m, 8px); background: var(--background-primary); color: var(--text-normal); break-inside: avoid; overflow-wrap: anywhere; }
+.moss-wall .moss-card:hover { border-color: var(--background-modifier-border-hover, var(--background-modifier-border)); }
+.moss-wall .moss-card-cover { display: block; width: 100%; height: auto; overflow: hidden; border-radius: var(--radius-m, 8px) var(--radius-m, 8px) 0 0; background: var(--background-secondary); }
+.moss-wall .moss-card-cover img { display: block; width: 100%; max-height: 320px; height: auto; object-fit: cover; }
+.moss-wall .moss-card-cover:focus-visible { outline-offset: -3px; }
+.moss-wall .moss-card-cover.moss-image-error { display: flex; align-items: center; justify-content: center; gap: 8px; min-height: 100px; padding: 12px; color: var(--text-muted); font-size: var(--font-ui-smaller, 12px); }
+.moss-wall .moss-card-inner { padding: 12px; }
+.moss-wall .moss-card-head { display: flex; align-items: flex-start; gap: 4px; min-width: 0; }
+.moss-wall .moss-card-title { flex: 1 1 auto; min-width: 0; padding: 2px 0; font-weight: var(--font-semibold, 600); line-height: 1.5; text-align: left; white-space: normal; overflow-wrap: anywhere; }
+.moss-wall .moss-card-title:hover { color: var(--text-accent); }
+.moss-wall .moss-card-more,
+.moss-wall .moss-card-grip { flex: 0 0 24px; width: 24px; height: 24px; }
+.moss-wall .moss-card-grip { display: inline-flex; align-items: center; justify-content: center; color: var(--text-muted); cursor: grab; touch-action: none; user-select: none; -webkit-user-select: none; }
+.moss-wall .moss-card-grip:hover { background: var(--background-modifier-hover); }
+.moss-wall .moss-card-grip:active { cursor: grabbing; }
+.moss-wall .moss-card-grip svg { width: 14px; height: 14px; }
+.moss-wall .moss-card-body { margin-top: 8px; max-height: 420px; overflow: auto; color: var(--text-normal); line-height: 1.6; scrollbar-width: thin; overflow-wrap: anywhere; }
+.moss-wall .moss-card-body :is(p, ul, ol, blockquote, pre) { margin: 0 0 8px; }
+.moss-wall .moss-card-body > :last-child { margin-bottom: 0; }
+.moss-wall .moss-card-body :is(ul, ol) { padding-left: 22px; }
+.moss-wall .moss-card-body :is(h1, h2, h3, h4, h5, h6) { margin: 12px 0 6px; font-size: 1em; line-height: 1.5; }
+.moss-wall .moss-card-body a { color: var(--link-color, var(--text-accent)); text-decoration: var(--link-decoration, underline); text-underline-offset: 2px; }
+.moss-wall .moss-card-body a:hover { color: var(--link-color-hover, var(--text-accent-hover)); }
+.moss-wall .moss-card-body :is(img, video, iframe) { max-width: 100%; }
+.moss-wall .moss-card-body blockquote { padding: 0 0 0 10px; border-left: 1px solid var(--background-modifier-border); color: var(--text-muted); }
+.moss-wall .moss-card-body pre { max-width: 100%; padding: 8px; overflow: auto; border-radius: var(--radius-s, 4px); background: var(--code-background, var(--background-secondary)); font-size: .9em; white-space: pre-wrap; }
+.moss-wall .moss-card-body code { padding: 1px 3px; border-radius: var(--radius-s, 4px); background: var(--code-background, var(--background-secondary)); color: var(--code-normal, var(--text-normal)); font-family: var(--font-monospace); font-size: .9em; }
+.moss-wall .moss-card-body pre code { padding: 0; font-size: inherit; }
+.moss-wall .moss-card-body hr { margin: 10px 0; border: 0; border-top: 1px solid var(--background-modifier-border); }
+.moss-wall .moss-card-body table { display: block; max-width: 100%; overflow: auto; font-size: .9em; }
+.moss-wall .moss-card-body input[type='checkbox'] { accent-color: var(--interactive-accent); }
+.moss-wall .moss-link-pill { display: inline-flex; align-items: center; gap: 6px; max-width: 100%; margin-top: 10px; padding: 4px 0; color: var(--text-accent); font-size: var(--font-ui-smaller, 12px); }
+.moss-wall .moss-link-pill:hover { color: var(--text-accent-hover); text-decoration: underline; }
+.moss-wall .moss-link-pill span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.moss-wall .moss-link-pill svg { width: 14px; height: 14px; }
+.moss-wall .moss-card-footer { display: flex; align-items: center; min-width: 0; margin-top: 10px; }
+.moss-wall .moss-card-footer:empty { display: none; }
+.moss-wall .moss-card-column { max-width: 100%; overflow: hidden; color: var(--text-muted); font-size: var(--font-ui-smaller, 12px); text-overflow: ellipsis; white-space: nowrap; }
+.moss-wall .moss-card-attachments { display: flex; flex-direction: column; gap: 4px; margin-top: 8px; }
+.moss-wall .moss-attachment-link { display: inline-flex; align-items: center; gap: 6px; max-width: 100%; padding: 4px 0; color: var(--text-accent); font-size: var(--font-ui-smaller, 12px); text-align: left; }
+.moss-wall .moss-attachment-link:hover { text-decoration: underline; }
+.moss-wall .moss-attachment-link span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.moss-wall .moss-attachment-link svg { width: 14px; height: 14px; }
+
+/* Each column scrolls vertically; the set of columns scrolls horizontally. */
+.moss-wall .moss-columns { display: flex; align-items: flex-start; gap: 12px; width: 100%; height: 100%; min-width: 0; min-height: 0; padding-bottom: 8px; overflow-x: auto; overflow-y: hidden; scroll-snap-type: x proximity; scroll-padding-inline: 1px; overscroll-behavior-x: contain; }
+.moss-wall .moss-column { display: flex; flex-direction: column; flex: 0 0 288px; min-width: 0; max-height: 100%; padding: 8px; border-radius: var(--radius-m, 8px); background: var(--background-secondary); scroll-snap-align: start; }
+.moss-wall .moss-column-header { display: flex; align-items: center; flex: 0 0 auto; gap: 6px; min-width: 0; margin-bottom: 8px; }
+.moss-wall .moss-column-title { display: flex; align-items: center; min-width: 0; min-height: 28px; padding: 2px 4px; font-weight: var(--font-semibold, 600); text-align: left; }
+.moss-wall .moss-column-title:hover { background: var(--background-modifier-hover); }
+.moss-wall .moss-column-title span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.moss-wall .moss-column-count { color: var(--text-muted); font-size: var(--font-ui-smaller, 12px); }
+.moss-wall .moss-column-list { min-height: 0; overflow-y: auto; overflow-x: hidden; scrollbar-width: thin; overscroll-behavior-y: contain; }
+.moss-wall .moss-column-list .moss-card { margin-bottom: 8px; }
+.moss-wall .moss-column-add { display: flex; align-items: center; gap: 6px; flex: 0 0 auto; width: 100%; min-height: 32px; padding: 6px 8px; color: var(--text-muted); text-align: left; }
+.moss-wall .moss-column-add:hover { background: var(--background-modifier-hover); color: var(--text-normal); }
+.moss-wall .moss-add-column { display: inline-flex; align-items: center; justify-content: center; gap: 6px; flex: 0 0 112px; min-height: 36px; padding: 8px; color: var(--text-muted); scroll-snap-align: start; }
+.moss-wall .moss-add-column:hover { background: var(--background-modifier-hover); color: var(--text-normal); }
+.moss-wall .is-dragging { opacity: .45; }
+.moss-wall .is-drop-target { outline: 2px dashed var(--interactive-accent); outline-offset: -2px; }
+.moss-wall.moss-file-over::after { content: '松开，添加图片或文件'; position: absolute; inset: 8px; z-index: 60; display: grid; place-items: center; border: 2px dashed var(--interactive-accent); border-radius: var(--radius-m, 8px); background: var(--background-primary); color: var(--text-accent); pointer-events: none; }
+.moss-wall .moss-empty { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; min-height: min(280px, 100%); padding: 32px 16px; text-align: center; }
+.moss-wall .moss-empty p { max-width: 300px; color: var(--text-muted); }
+.moss-wall .moss-empty small { color: var(--text-muted); font-size: var(--font-ui-smaller, 12px); }
+
+.moss-wall .moss-menu { position: absolute; z-index: 30; width: 208px; max-width: calc(100% - 16px); max-height: min(430px, calc(100% - 16px)); padding: 4px; overflow: auto; border: 1px solid var(--background-modifier-border); border-radius: var(--radius-m, 8px); background: var(--background-secondary); color: var(--text-normal); }
+.moss-wall .moss-menu-item { display: flex; align-items: center; gap: 8px; width: 100%; min-height: 32px; padding: 6px 8px; text-align: left; }
+.moss-wall .moss-menu-item:hover { background: var(--background-modifier-hover); }
+.moss-wall .moss-menu-label { padding: 8px 8px 4px; color: var(--text-muted); font-size: var(--font-ui-smaller, 12px); }
+.moss-wall .moss-menu-divider { height: 1px; margin: 4px; background: var(--background-modifier-border); }
+.moss-wall .moss-danger { color: var(--text-error); }
+
+/* The editor stays inside its pane and keeps actions outside scrolling content. */
+.moss-wall .moss-editor-overlay { position: absolute; inset: 0; z-index: 40; display: flex; justify-content: flex-end; min-height: 0; background: var(--background-modifier-cover); }
+.moss-wall .moss-editor { display: flex; flex-direction: column; width: min(420px, 100%); height: 100%; min-width: 0; min-height: 0; overflow: hidden; border-left: 1px solid var(--background-modifier-border); background: var(--background-primary); outline: none; }
+.moss-wall .moss-editor-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex: 0 0 auto; min-width: 0; padding: 14px 16px; border-bottom: 1px solid var(--background-modifier-border); }
+.moss-wall .moss-editor-header > div { min-width: 0; }
+.moss-wall .moss-editor-header h2 { font-size: var(--font-ui-medium, 15px); font-weight: var(--font-semibold, 600); line-height: 1.5; overflow-wrap: anywhere; }
+.moss-wall .moss-editor-header p { margin-top: 4px; color: var(--text-muted); font-size: var(--font-ui-smaller, 12px); }
+.moss-wall .moss-editor-header p:empty { display: none; }
+.moss-wall .moss-editor-content { flex: 1 1 auto; min-width: 0; min-height: 0; padding: 16px; overflow: auto; overscroll-behavior: contain; }
+.moss-wall .moss-editor-footer { display: flex; align-items: center; justify-content: flex-end; gap: 8px; flex: 0 0 auto; padding: 12px 16px max(12px, env(safe-area-inset-bottom)); border-top: 1px solid var(--background-modifier-border); background: var(--background-primary); }
+.moss-wall .moss-editor-footer .moss-button { min-width: 64px; }
+.moss-wall .moss-field { min-width: 0; margin-bottom: 16px; }
+.moss-wall .moss-field-label { display: block; margin-bottom: 6px; color: var(--text-normal); }
+.moss-wall .moss-field-hint { display: block; margin-top: 4px; color: var(--text-muted); font-size: var(--font-ui-smaller, 12px); }
+.moss-wall .moss-input { display: block; width: 100%; min-width: 0; min-height: 34px; height: auto; padding: 6px 8px; border: 1px solid var(--background-modifier-border); border-radius: var(--input-radius, var(--radius-s, 4px)); background: var(--background-modifier-form-field, var(--background-primary)); color: var(--text-normal); box-shadow: none; line-height: 1.5; }
+.moss-wall .moss-input:hover { border-color: var(--background-modifier-border-hover, var(--background-modifier-border)); }
+.moss-wall .moss-input:focus { border-color: var(--interactive-accent); box-shadow: none; }
+.moss-wall .moss-input::placeholder { color: var(--text-faint); }
+.moss-wall .moss-input[aria-invalid='true'] { border-color: var(--text-error); }
+.moss-wall textarea.moss-input { min-height: 80px; resize: vertical; }
+.moss-wall textarea.moss-body-input { min-height: 160px; line-height: 1.6; }
+.moss-wall select.moss-input { padding-right: 24px; cursor: pointer; }
+.moss-wall .moss-file-input { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.moss-wall .moss-upload { position: relative; margin-top: 4px; padding: 12px; border: 1px dashed var(--background-modifier-border); border-radius: var(--radius-s, 4px); text-align: center; }
+.moss-wall .moss-upload-button { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 32px; padding: 6px 10px; background: var(--interactive-normal); color: var(--text-normal); }
+.moss-wall .moss-upload-button:hover { background: var(--interactive-hover); }
+.moss-wall .moss-upload-hint { display: block; margin-top: 6px; color: var(--text-muted); font-size: var(--font-ui-smaller, 12px); }
+.moss-wall .moss-editor-attachments { display: flex; flex-direction: column; gap: 8px; }
+.moss-wall .moss-editor-attachment { display: flex; align-items: center; gap: 8px; min-width: 0; padding: 6px 0; font-size: var(--font-ui-smaller, 12px); }
+.moss-wall .moss-editor-attachment img { flex: 0 0 auto; width: 52px; height: 40px; border-radius: var(--radius-s, 4px); object-fit: cover; }
+.moss-wall .moss-editor-attachment > span { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.moss-wall .moss-form-error { flex: 0 0 auto; max-height: 96px; padding: 10px 16px; overflow: auto; border-top: 1px solid var(--background-modifier-border); background: var(--background-secondary); color: var(--text-error); font-size: var(--font-ui-smaller, 12px); line-height: 1.5; overflow-wrap: anywhere; }
+.moss-wall .moss-unsaved { flex: 0 0 auto; padding: 12px 16px; border-bottom: 1px solid var(--background-modifier-border); background: var(--background-secondary); }
+.moss-wall .moss-unsaved p { margin-bottom: 8px; }
+.moss-wall .moss-unsaved .moss-button { margin-right: 6px; }
+.moss-wall .moss-column-removal { margin-top: 24px; padding-top: 16px; border-top: 1px solid var(--background-modifier-border); }
+.moss-wall .moss-column-removal p { margin-bottom: 8px; color: var(--text-muted); }
+.moss-wall .moss-column-removal .moss-input { margin-bottom: 8px; }
+.moss-wall .moss-toast { position: absolute; z-index: 70; bottom: max(12px, env(safe-area-inset-bottom)); left: 50%; display: flex; align-items: center; gap: 8px; width: max-content; max-width: calc(100% - 24px); padding: 6px 8px 6px 12px; border: 1px solid var(--background-modifier-border); border-radius: var(--radius-m, 8px); background: var(--background-secondary); color: var(--text-normal); font-size: var(--font-ui-smaller, 12px); transform: translateX(-50%); }
+.moss-wall .moss-toast > span { min-width: 0; overflow-wrap: anywhere; }
+.moss-wall .moss-toast-action { min-height: 30px; padding: 4px 6px; color: var(--text-accent); white-space: nowrap; }
+
+@container moss (min-width: 601px) and (max-width: 959px) {
+  .moss-wall .moss-grid { column-count: 2; column-width: auto; }
+}
+@container moss (min-width: 1600px) {
+  .moss-wall .moss-grid { column-width: 300px; }
+}
+@container moss (max-width: 600px) {
+  .moss-wall .moss-toolbar { flex-wrap: wrap; gap: 8px; padding: 8px 12px; }
+  .moss-wall .moss-title-button { flex: 1 0 100%; }
+  .moss-wall .moss-modes { flex: 0 0 auto; }
+  .moss-wall .moss-toolbar-actions { margin-left: auto; }
+  .moss-wall .moss-mode { padding-inline: 8px; }
+  .moss-wall .moss-content { padding: 12px; }
+  .moss-wall .moss-grid { column-count: 1; column-width: auto; }
+  .moss-wall .moss-column { flex-basis: calc(100cqi - 56px); }
+  .moss-wall .moss-editor { width: 100%; border-left: 0; }
+  .moss-wall .moss-editor-header { padding: 10px 12px; }
+  .moss-wall .moss-editor-content { padding: 12px; }
+  .moss-wall .moss-editor-footer { padding-inline: 12px; }
+  .moss-wall .moss-unsaved,
+  .moss-wall .moss-form-error { padding-inline: 12px; }
+}
+@container moss (max-width: 350px) {
+  .moss-wall .moss-toolbar { column-gap: 4px; padding-inline: 8px; }
+  .moss-wall .moss-toolbar-actions { gap: 2px; }
+  .moss-wall .moss-toolbar-actions > .moss-button { padding-inline: 8px; }
+  .moss-wall .moss-mode { gap: 4px; padding-inline: 6px; }
+}
+@media (pointer: coarse) {
+  .moss-wall :is(.moss-button, .moss-mode, .moss-title-button, .moss-column-title, .moss-column-add, .moss-add-column, .moss-upload-button, .moss-attachment-link, .moss-link-pill, .moss-menu-item, .moss-toast-action) { min-height: 44px; }
+  .moss-wall .moss-icon-button,
+  .moss-wall .moss-card-grip { flex-basis: 44px; width: 44px; min-width: 44px; height: 44px; min-height: 44px; }
+  .moss-wall .moss-card-title { min-height: 44px; padding-block: 10px; }
+  .moss-wall .moss-card-head { align-items: center; gap: 2px; }
+  .moss-wall .moss-card-grip svg { width: 16px; height: 16px; }
+  .moss-wall .moss-input { min-height: 44px; font-size: 16px; }
+  .moss-wall .moss-toast { flex-wrap: wrap; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .moss-wall *,
+  .moss-wall *::before,
+  .moss-wall *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
+}
+
+.moss-view.view-content { display: flex; flex-direction: column; min-width: 0; min-height: 0; padding: 0; overflow: hidden; }
+.moss-view > .moss-wall { flex: 1 1 auto; min-height: 0; }
+.moss-view > .moss-load-error { flex: 0 0 auto; padding: 12px 16px; border-bottom: 1px solid var(--background-modifier-border); background: var(--background-secondary); color: var(--text-normal); font-size: var(--font-ui-small, 14px); line-height: 1.5; }
+.moss-view > .moss-load-error strong { display: block; margin-bottom: 4px; }
+.moss-view > .moss-load-error p { margin: 0 0 8px; overflow-wrap: anywhere; }
+.moss-view > .moss-load-error button { min-height: 44px; padding: 6px 12px; }
+.moss-view > .moss-load-error button:focus-visible { outline: 2px solid var(--interactive-accent); outline-offset: 2px; }

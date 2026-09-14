@@ -1,0 +1,21 @@
+# LinB Kanban 0.2.2 validation
+
+Date: 2026-09-14.
+
+## Automated checks
+
+- TypeScript type checking passed.
+- All 40 existing tests passed: 14 model, 6 repository, 14 interface and 6 compiled-plugin integration tests.
+- Plugin and local preview builds passed. The plugin bundle only imports Obsidian; no Node.js or Electron runtime APIs are included.
+- The native `copy-plus` icon was verified in a local Obsidian application distribution. The ribbon callback enters the creation flow.
+- The stable plugin ID, view type, `.moss` schema and storage paths are retained from earlier Moss Wall releases.
+
+Coverage includes atomic saves, ordering and cross-column moves, conflict handling, deletion recovery, malformed-file protection, attachment imports, reloads, Markdown exports, simulated touch gestures, focus restoration and scroll preservation.
+
+## Limits
+
+Integration tests use a minimal simulated Obsidian host. Pointer tests use simulated events and layout geometry. No real-device iOS or Android verification or full Obsidian visual acceptance is claimed. Third-party themes and desktop pop-out windows have not been exhaustively tested.
+
+## Distribution
+
+The public GitHub release provides `main.js`, `manifest.json` and `styles.css` separately. The optional ZIP uses the `moss-wall/` folder for compatibility with existing installations. Community-directory acceptance is a separate step from publishing a GitHub release.

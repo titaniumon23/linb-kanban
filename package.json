@@ -1,0 +1,27 @@
+{
+  "name": "linb-kanban",
+  "version": "0.2.2",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "check": "tsc --noEmit",
+    "test": "node --import tsx --test tests/*.test.ts",
+    "preview": "node scripts/serve.mjs",
+    "package": "node scripts/package.mjs"
+  },
+  "devDependencies": {
+    "@types/node": "22.18.6",
+    "@types/jsdom": "30.0.0",
+    "esbuild": "0.25.10",
+    "jsdom": "29.1.1",
+    "obsidian": "1.8.7",
+    "tsx": "4.20.6",
+    "typescript": "5.9.2"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/titaniumon23/linb-kanban.git"
+  }
+}

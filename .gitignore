@@ -1,0 +1,12 @@
+node_modules
+dist/
+test-vault/
+test-vault-*/
+artifacts/
+*.zip
+
+# Local design notes and release handoff
+PRODUCT.md
+DESIGN.md
+COMMUNITY_SUBMISSION.md
+.DS_Store

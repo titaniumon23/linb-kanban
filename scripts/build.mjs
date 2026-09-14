@@ -1,0 +1,11 @@
+import { build } from 'esbuild';
+import { mkdir, copyFile, readFile } from 'node:fs/promises';
+await mkdir('dist/moss-wall', { recursive: true });
+await mkdir('dist/preview', { recursive: true });
+await build({ entryPoints: ['src/main.ts'], bundle: true, outfile: 'dist/moss-wall/main.js', platform: 'browser', format: 'cjs', target: 'es2020', external: ['obsidian'], minify: true, logLevel: 'info' });
+for (const file of ['manifest.json', 'styles.css']) await copyFile(file, `dist/moss-wall/${file}`);
+await build({ entryPoints: ['preview/main.ts'], bundle: true, outfile: 'dist/preview/app.js', platform: 'browser', format: 'iife', target: 'es2020', sourcemap: true, logLevel: 'info' });
+await copyFile('preview/index.html', 'dist/preview/index.html');
+await copyFile('styles.css', 'dist/preview/styles.css');
+const code = await readFile('dist/moss-wall/main.js', 'utf8');
+if (/require\(["'](?:node:|fs["']|path["']|electron["'])/.test(code)) throw new Error('Unexpected desktop-only dependency in plugin');

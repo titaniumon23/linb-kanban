@@ -1,0 +1,16 @@
+import { mkdir, writeFile, cp, readFile } from 'node:fs/promises';
+import { createDemoBoard, serializeBoard } from '../src/model';
+const { version } = JSON.parse(await readFile('manifest.json', 'utf8'));
+const root = `test-vault-${version}`;
+const board = createDemoBoard();
+await mkdir(`${root}/.obsidian/plugins`, { recursive: true });
+await mkdir(`${root}/Moss Wall/附件/${board.id}`, { recursive: true });
+await cp('dist/moss-wall', `${root}/.obsidian/plugins/moss-wall`, { recursive: true });
+const file = `Moss Wall/${board.title}.moss`;
+await writeFile(`${root}/${file}`, serializeBoard(board));
+await writeFile(`${root}/.obsidian/community-plugins.json`, JSON.stringify(['moss-wall']));
+await writeFile(`${root}/.obsidian/app.json`, JSON.stringify({ showUnsupportedFiles: true }));
+await writeFile(`${root}/.obsidian/appearance.json`, JSON.stringify({ theme: 'moonstone', baseFontSize: 16 }));
+await writeFile(`${root}/.obsidian/workspace.json`, JSON.stringify({ main: { id: 'moss-test-root', type: 'split', children: [{ id: 'moss-test-tabs', type: 'tabs', children: [{ id: 'moss-test-leaf', type: 'leaf', state: { type: 'moss-wall-view', state: { file }, icon: 'copy-plus', title: board.title } }] }], direction: 'vertical' }, active: 'moss-test-leaf' }));
+await writeFile(`${root}/README.md`, '# LinB Kanban 独立测试库\n\n此文件夹仅用于验证新插件，不包含个人笔记。\n');
+console.log(`Prepared ${root}/${file}`);
