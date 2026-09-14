@@ -1,24 +1,23 @@
-# LinB Kanban 0.2.5 validation
+# LinB Kanban 0.3.0 validation
 
 Date: 2026-09-14.
 
 ## Automated checks
 
-- TypeScript type checking passed.
-- Vault image selection is tested through the compiled plugin entry: name/path search and thumbnails, close-before-selection ordering, original-path reuse without binary writes, duplicate prevention, reload, reference removal preserving the source, cancellation, empty/deleted images and view-unload cleanup.
-- Card-color selection and persistence are covered by the existing create/edit/reopen interaction test.
-- For the local preview theme values, normal text, secondary text and links on the six tinted surfaces meet 4.5:1: minimum 4.60:1 in light mode and 5.84:1 in dark mode. Third-party theme values may differ.
-- All 52 tests passed: 3 Markdown helpers, 14 model, 6 repository, 20 interface and 9 compiled-plugin integration tests.
-- Plugin and local preview builds passed. The plugin bundle only imports Obsidian; no Node.js or Electron runtime APIs are included.
-- The native `copy-plus` icon was verified in a local Obsidian application distribution. The ribbon callback enters the creation flow.
-- The stable plugin ID, view type, `.moss` schema and storage paths are retained from earlier Moss Wall releases.
-
-Coverage includes atomic saves, ordering and cross-column moves, conflict handling, deletion recovery, malformed-file protection, attachment imports, reloads, Markdown exports, simulated touch gestures, focus restoration and scroll preservation. New regressions cover mouse movement up/down and across columns, empty-column and gap placement, wall sorting, edge scrolling and cancellation, selected-line task conversion, checked-state persistence and safe interception of native Markdown checkbox handlers.
+- TypeScript checking and all 64 automated tests passed.
+- Markdown round trips preserve columns/wall layout, global and per-column order, all card colors, empty columns, text, checked tasks, attachments and unknown metadata.
+- Body text is stored once. Source body edits are parsed; stale editors cannot overwrite or delete an externally edited body. Damaged markers and unsupported structural edits are refused without writes.
+- Compiled-plugin host tests cover automatic routing of received Markdown and restored tabs, ordinary-note isolation, file-switch races, unload behavior, creation/export paths, and non-destructive legacy import.
+- Existing tests cover atomic saves, concurrent changes, deletion undo, simulated mouse/touch movement, edge scrolling, selected-line task conversion, attachments, vault image reuse, focus and scroll preservation.
+- Plugin and preview builds passed. The runtime bundle imports Obsidian only, without Node.js or Electron dependencies.
+- Installation directory, manifest ID, view name, stylesheet selectors and new storage paths use LinB Kanban naming. Historical identifiers exist only in read-only import and preview-data migration compatibility code/tests.
 
 ## Limits
 
-Integration tests use a minimal simulated Obsidian host. Pointer tests use simulated events and layout geometry. No real-device iOS or Android verification or full Obsidian visual acceptance is claimed. Third-party themes and desktop pop-out windows have not been exhaustively tested.
+Tests use a simulated Obsidian host and DOM/pointer geometry. Full Obsidian visual acceptance and physical iOS/Android device tests have not been completed. Third-party themes and desktop pop-out windows have not been exhaustively tested.
+
+Sharing a Markdown board does not embed image or attachment bytes. Referenced files must accompany it at the same vault-relative paths. External attachment renames are not automatically reconciled with hidden metadata. Source editing outside card-body blocks is not supported; these edits are detected and protected from silent replacement.
 
 ## Distribution
 
-The public GitHub release provides `main.js`, `manifest.json` and `styles.css` separately. The optional ZIP uses the `moss-wall/` folder for compatibility with existing installations. Community-directory acceptance is a separate step from publishing a GitHub release.
+The local ZIP contains the `linb-kanban/` installation folder. A separate generated demo vault and a standalone Markdown sample are provided. No public GitHub repository, release, or Community-directory submission has been made.

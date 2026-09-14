@@ -98,20 +98,20 @@ test('column deletion moves cards, invalidates stale editors, and never leaves d
 
 test('unknown extension metadata is preserved through parse, edit, and serialize', () => {
   const { board } = fixture();
-  const extended = JSON.parse(serializeBoard(board));
+  const extended = JSON.parse(JSON.stringify(board));
   extended.extension = { nested: ['中文', { custom: true }] };
   extended.cards[0].pluginMetadata = { retained: 42 };
   extended.columns[0].extra = '保留';
-  const restored = JSON.parse(serializeBoard(applyOperation(parseBoard(JSON.stringify(extended)), { type: 'card:update', id: board.cards[0].id, patch: { title: '编辑后' } })));
-  assert.deepEqual(restored.extension, extended.extension);
-  assert.deepEqual(restored.cards[0].pluginMetadata, extended.cards[0].pluginMetadata);
-  assert.equal(restored.columns[0].extra, '保留');
+  const restored = parseBoard(serializeBoard(applyOperation(parseBoard(JSON.stringify(extended)), { type: 'card:update', id: board.cards[0].id, patch: { title: '编辑后' } })));
+  assert.deepEqual((restored as any).extension, extended.extension);
+  assert.deepEqual((restored.cards[0] as any).pluginMetadata, extended.cards[0].pluginMetadata);
+  assert.equal((restored.columns[0] as any).extra, '保留');
 });
 
 test('existing 0.1 board layout, colors, content and attachments survive a 0.2 edit', () => {
   const { board, first } = fixture();
   const old = { ...board, layout: 'wall' as const, background: 'sage' as const };
-  old.cards[0] = { ...old.cards[0], color: 'rose', attachments: [{ path: 'Moss Wall/附件/photo.png', name: 'photo.png', mime: 'image/png' }] };
+  old.cards[0] = { ...old.cards[0], color: 'rose', attachments: [{ path: 'LinB Kanban/附件/photo.png', name: 'photo.png', mime: 'image/png' }] };
   const restored = parseBoard(serializeBoard(old));
   const edited = applyOperation(restored, { type: 'card:update', id: first.id, expectedUpdatedAt: first.updatedAt, patch: { title: '改后的标题' } });
   assert.equal(edited.version, 1);
@@ -173,17 +173,17 @@ test('markdown export retains Unicode, markdown body, column order, and portable
 test('markdown exports resolve vault attachments relative to the exported note folder', () => {
   let board = createBoard();
   const card = createCard(board.columns[0].id, { attachments: [
-    { path: 'Moss Wall/附件/id/春天.png', name: '春天.png', mime: 'image/png' },
+    { path: 'LinB Kanban/附件/id/春天.png', name: '春天.png', mime: 'image/png' },
     { path: '其他目录/资料.pdf', name: '资料.pdf', mime: 'application/pdf' },
   ] });
   board = applyOperation(board, { type: 'card:add', card });
-  const siblingExport = exportMarkdown(board, 'Moss Wall');
+  const siblingExport = exportMarkdown(board, 'LinB Kanban');
   assert.ok(siblingExport.includes('](<%E9%99%84%E4%BB%B6/id/%E6%98%A5%E5%A4%A9.png>)'));
   assert.ok(siblingExport.includes('](<../%E5%85%B6%E4%BB%96%E7%9B%AE%E5%BD%95/'));
   const nestedExport = exportMarkdown(board, '笔记/整理');
-  assert.ok(nestedExport.includes('](<../../Moss%20Wall/'));
+  assert.ok(nestedExport.includes('](<../../LinB%20Kanban/'));
   const rootExport = exportMarkdown(board);
-  assert.ok(rootExport.includes('](<Moss%20Wall/'));
+  assert.ok(rootExport.includes('](<LinB%20Kanban/'));
   assert.throws(() => exportMarkdown(board, '../outside'));
   assert.throws(() => exportMarkdown(board, '/absolute'));
 });

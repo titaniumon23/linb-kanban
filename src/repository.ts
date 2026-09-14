@@ -14,7 +14,7 @@ export class BoardRepository {
   save(path: string, operation: BoardOperation): Promise<Board> {
     const previous = this.pending.get(path) ?? Promise.resolve();
     const next = previous.catch(() => undefined).then(async () => {
-      const saved = await this.io.process(path, current => serializeBoard(applyOperation(parseBoard(current), operation)));
+      const saved = await this.io.process(path, current => serializeBoard(applyOperation(parseBoard(current), operation), path.split('/').slice(0, -1).join('/')));
       return parseBoard(saved);
     });
     this.pending.set(path, next);

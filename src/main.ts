@@ -1,19 +1,21 @@
 import { App, Component, FileView, MarkdownRenderer, Modal, Notice, Plugin, Setting, SuggestModal, TFile, TFolder, WorkspaceLeaf, normalizePath } from 'obsidian';
-import { createBoard, createDemoBoard, createId, exportMarkdown, safeExternalUrl, serializeBoard } from './model';
+import { createBoard, createDemoBoard, createId, exportMarkdown, isBoardMarkdown, parseBoard, safeExternalUrl, serializeBoard } from './model';
 import { BoardRepository } from './repository';
 import type { Attachment, Board, WallHost } from './types';
 import { WallApp } from './wall';
 
-const VIEW_TYPE = 'moss-wall-view';
-const ROOT = 'Moss Wall';
+const VIEW_TYPE = 'linb-kanban-view';
+const ROOT = 'LinB Kanban';
 const IMAGE_TYPES: Record<string, string> = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', webp: 'image/webp', gif: 'image/gif', avif: 'image/avif', bmp: 'image/bmp', svg: 'image/svg+xml' };
 const MAX_FILE = 25 * 1024 * 1024;
 
 function problem(error: unknown): string { return error instanceof Error ? error.message : String(error); }
 function leafName(value: string): string { return value.replace(/[\\/:*?"<>|\u0000-\u001f]/g, '-').replace(/^\.+/, '').trim().slice(0, 90) || '未命名看板'; }
 
-export default class MossWallPlugin extends Plugin {
+export default class LinBKanbanPlugin extends Plugin {
   repository!: BoardRepository;
+  private routing = new WeakSet<WorkspaceLeaf>();
+  private stopped = false;
   async onload(): Promise<void> {
     const find = (path: string): TFile => {
       const file = this.app.vault.getAbstractFileByPath(path);
@@ -24,14 +26,17 @@ export default class MossWallPlugin extends Plugin {
       read: path => this.app.vault.read(find(path)),
       process: (path, update) => this.app.vault.process(find(path), update),
     });
-    this.registerView(VIEW_TYPE, leaf => new MossWallView(leaf, this));
-    this.registerExtensions(['moss'], VIEW_TYPE);
+    this.registerView(VIEW_TYPE, leaf => new LinBKanbanView(leaf, this));
+    this.register(() => { this.stopped = true; });
+    this.registerEvent(this.app.workspace.on('file-open', () => { void this.routeOpenNotes(); }));
+    this.app.workspace.onLayoutReady(() => { void this.routeOpenNotes(); });
     this.addRibbonIcon('copy-plus', '新建看板', () => this.createBoardDialog());
     this.addCommand({ id: 'open-board', name: '打开看板', callback: () => this.chooseBoard() });
     this.addCommand({ id: 'create-board', name: '新建看板', callback: () => this.createBoardDialog() });
     this.addCommand({ id: 'create-demo-board', name: '创建示例看板', callback: () => { void this.writeDemo().catch(e => new Notice(problem(e))); } });
+    this.addCommand({ id: 'import-legacy-board', name: '导入旧版看板', callback: () => this.importLegacyBoard() });
     this.registerEvent(this.app.workspace.on('file-menu', (menu, file) => {
-      if (file instanceof TFile && file.extension === 'moss') menu.addItem(item => item.setTitle('用看板打开').setIcon('copy-plus').onClick(() => { void this.openBoard(file); }));
+      if (file instanceof TFile && this.app.metadataCache.getFileCache(file)?.frontmatter?.['linb-kanban'] === 1) menu.addItem(item => item.setTitle('用看板打开').setIcon('copy-plus').onClick(() => { void this.openBoard(file); }));
     }));
   }
 
@@ -49,7 +54,7 @@ export default class MossWallPlugin extends Plugin {
 
   async writeNewBoard(board: Board): Promise<void> {
     await this.ensureFolder(ROOT);
-    const file = await this.app.vault.create(this.uniquePath(`${ROOT}/${leafName(board.title)}`, 'moss'), serializeBoard(board));
+    const file = await this.app.vault.create(this.uniquePath(`${ROOT}/${leafName(board.title)}`, 'md'), serializeBoard(board, ROOT));
     await this.openBoard(file);
   }
 
@@ -64,20 +69,57 @@ export default class MossWallPlugin extends Plugin {
   }
 
   createBoardDialog(): void { new CreateBoardModal(this.app, async title => this.writeNewBoard(createBoard(title))).open(); }
-  chooseBoard(): void {
-    const files = this.app.vault.getFiles().filter(file => file.extension === 'moss').sort((a, b) => b.stat.mtime - a.stat.mtime);
+  async chooseBoard(): Promise<void> {
+    const files: TFile[] = [];
+    for (const file of this.app.vault.getFiles()) {
+      if (file.extension !== 'md') continue;
+      try { if (isBoardMarkdown(await this.app.vault.cachedRead(file))) files.push(file); }
+      catch { /* A note may be removed while the picker is opening. */ }
+    }
+    if (this.stopped) return;
     if (!files.length) { this.createBoardDialog(); return; }
-    new BoardPicker(this.app, files, file => { void this.openBoard(file); }).open();
+    files.sort((a, b) => b.stat.mtime - a.stat.mtime);
+    new BoardPicker(this.app, files, file => { void this.openBoard(file).catch(e => new Notice(problem(e))); }).open();
+  }
+  private importLegacyBoard(): void {
+    // Historical extension is read only, never registered or used for new files.
+    const files = this.app.vault.getFiles().filter(file => ['moss', 'json'].includes(file.extension));
+    if (!files.length) { new Notice('请先把旧版看板文件放入当前笔记库，再运行此命令。'); return; }
+    new BoardPicker(this.app, files, file => {
+      void this.app.vault.read(file).then(text => this.writeNewBoard(parseBoard(text)))
+        .then(() => new Notice('已创建 Markdown 看板，旧文件和附件保持不变。'))
+        .catch(error => new Notice(problem(error)));
+    }).open();
+  }
+  private async routeOpenNotes(): Promise<void> {
+    if (this.stopped) return;
+    await Promise.all(this.app.workspace.getLeavesOfType('markdown').map(async leaf => {
+      if (this.routing.has(leaf)) return;
+      const path = leaf.getViewState().state?.file;
+      if (typeof path !== 'string') return;
+      const file = this.app.vault.getAbstractFileByPath(path);
+      if (!(file instanceof TFile) || file.extension !== 'md') return;
+      this.routing.add(leaf);
+      try {
+        const text = await this.app.vault.cachedRead(file);
+        if (this.stopped || leaf.getViewState().type !== 'markdown' || leaf.getViewState().state?.file !== path) return;
+        if (isBoardMarkdown(text)) await leaf.setViewState({ type: VIEW_TYPE, state: { file: path } });
+      } catch (error) { if (!this.stopped) new Notice(problem(error)); }
+      finally {
+        this.routing.delete(leaf);
+        if (!this.stopped && leaf.getViewState().type === 'markdown' && leaf.getViewState().state?.file !== path) void this.routeOpenNotes();
+      }
+    }));
   }
   async openBoard(file: TFile): Promise<void> {
-    const existing = this.app.workspace.getLeavesOfType(VIEW_TYPE).find(leaf => (leaf.view as MossWallView).file?.path === file.path);
+    const existing = this.app.workspace.getLeavesOfType(VIEW_TYPE).find(leaf => (leaf.view as LinBKanbanView).file?.path === file.path);
     const leaf = existing ?? this.app.workspace.getLeaf('tab');
-    if (!existing) await leaf.openFile(file);
+    if (!existing) await leaf.setViewState({ type: VIEW_TYPE, state: { file: file.path } });
     await this.app.workspace.revealLeaf(leaf);
   }
 }
 
-class MossWallView extends FileView {
+class LinBKanbanView extends FileView {
   private wall: WallApp | null = null;
   private loadToken = 0;
   private boardId = '';
@@ -86,19 +128,27 @@ class MossWallView extends FileView {
   private errorEl: HTMLElement | null = null;
   private imagePicker: VaultImagePicker | null = null;
 
-  constructor(leaf: WorkspaceLeaf, private readonly plugin: MossWallPlugin) {
+  constructor(leaf: WorkspaceLeaf, private readonly plugin: LinBKanbanPlugin) {
     super(leaf);
     this.registerEvent(this.app.vault.on('modify', file => { if (file instanceof TFile && file === this.file) void this.refresh(file); }));
   }
   getViewType(): string { return VIEW_TYPE; }
   getDisplayText(): string { return this.file?.basename ?? '看板'; }
   getIcon(): string { return 'copy-plus'; }
-  canAcceptExtension(extension: string): boolean { return extension === 'moss'; }
+  canAcceptExtension(extension: string): boolean { return extension === 'md'; }
 
   async onLoadFile(file: TFile): Promise<void> {
     this.disposeUI();
     this.contentEl.empty();
-    this.contentEl.addClass('moss-view');
+    this.contentEl.addClass('linb-view');
+    let text: string;
+    try { text = await this.app.vault.read(file); }
+    catch { await this.refresh(file); return; }
+    if (this.file !== file) return;
+    if (!isBoardMarkdown(text)) {
+      await this.leaf.setViewState({ type: 'markdown', state: { file: file.path } });
+      return;
+    }
     await this.refresh(file);
   }
   async onUnloadFile(): Promise<void> { this.loadToken++; this.disposeUI(); }
@@ -123,7 +173,7 @@ class MossWallView extends FileView {
     } catch (error) {
       if (token !== this.loadToken) return;
       this.errorEl?.remove();
-      this.errorEl = this.contentEl.createDiv({ cls: 'moss-load-error' });
+      this.errorEl = this.contentEl.createDiv({ cls: 'linb-load-error' });
       this.errorEl.setAttribute('role', 'alert');
       this.errorEl.createEl('strong', { text: '看板暂时无法读取' });
       this.errorEl.createEl('p', { text: `${problem(error)} 原文件未被修改。` });
@@ -168,7 +218,7 @@ class MossWallView extends FileView {
         const folder = file.parent && !file.parent.isRoot() ? file.parent.path : '';
         const target = this.plugin.uniquePath(`${folder ? `${folder}/` : ''}${leafName(current.title)} - 导出`, 'md');
         const exported = await this.app.vault.create(target, exportMarkdown(current, folder));
-        await this.app.workspace.getLeaf('tab').openFile(exported);
+        await this.plugin.openBoard(exported);
         new Notice('已导出为 Markdown，原看板保持不变。');
       },
       createBoard: () => this.plugin.createBoardDialog(),
@@ -229,7 +279,7 @@ class VaultImagePicker extends SuggestModal<TFile> {
     return this.files.filter(file => file.path.toLocaleLowerCase().includes(search));
   }
   renderSuggestion(file: TFile, container: HTMLElement): void {
-    const row = container.createDiv({ cls: 'moss-vault-image-option' });
+    const row = container.createDiv({ cls: 'linb-vault-image-option' });
     const image = row.createEl('img'); image.src = this.app.vault.getResourcePath(file); image.alt = ''; image.loading = 'lazy';
     image.addEventListener('error', () => { image.hidden = true; });
     const label = row.createDiv(); label.createDiv({ text: file.name }); label.createEl('small', { text: file.path });
@@ -248,7 +298,7 @@ class CreateBoardModal extends Modal {
     this.titleEl.setText('新建看板');
     let title = '我的看板';
     let busy = false;
-    const error = this.contentEl.createDiv({ cls: 'moss-create-error' }); error.setAttribute('role', 'alert');
+    const error = this.contentEl.createDiv({ cls: 'linb-create-error' }); error.setAttribute('role', 'alert');
     new Setting(this.contentEl).setName('名称').addText(input => { input.setValue(title).onChange(value => { title = value; }); input.inputEl.setAttribute('aria-label', '看板名称'); setTimeout(() => input.inputEl.select(), 0); });
     new Setting(this.contentEl).addButton(button => button.setButtonText('创建').setCta().onClick(async () => {
       if (busy) return;

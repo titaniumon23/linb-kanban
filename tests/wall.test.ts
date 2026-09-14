@@ -22,7 +22,7 @@ function sampleBoard(): Board {
 }
 
 function fixture(t: TestContext, initial: Board = sampleBoard(), renderer?: WallHost['renderMarkdown']) {
-  const dom = new JSDOM('<!doctype html><html><body><div id="app"></div></body></html>', { url: 'https://moss.test/' });
+  const dom = new JSDOM('<!doctype html><html><body><div id="app"></div></body></html>', { url: 'https://linb.test/' });
   const globals = ['window', 'document', 'Element', 'HTMLElement', 'HTMLDivElement', 'Node', 'File', 'Event', 'KeyboardEvent'] as const;
   const descriptors = new Map(globals.map(name => [name, Object.getOwnPropertyDescriptor(globalThis, name)]));
   for (const name of globals) Object.defineProperty(globalThis, name, { configurable: true, writable: true, value: dom.window[name] });
@@ -51,7 +51,7 @@ function fixture(t: TestContext, initial: Board = sampleBoard(), renderer?: Wall
       if (deferred) await deferred;
       return files.map(file => ({ path: `附件/${file.name}`, name: file.name, mime: file.type }));
     },
-    resolveAsset(path) { return `https://moss.test/${encodeURI(path)}`; },
+    resolveAsset(path) { return `https://linb.test/${encodeURI(path)}`; },
     renderMarkdown: renderer || ((text, container) => { container.textContent = text; }),
     openAttachment(attachment) { opened.push(attachment); }, openLink() {}, async exportMarkdown() {}, createBoard() {}, chooseBoard() {},
   };
@@ -129,7 +129,7 @@ function menuAction(root: ParentNode, title: string, action: string) {
 
 test('create and edit a card with text and column, then reopen persisted content', async t => {
   const h = fixture(t, createBoard());
-  button(h.root.querySelector('.moss-toolbar')!, '添加卡片').click();
+  button(h.root.querySelector('.linb-toolbar')!, '添加卡片').click();
   await settle();
   let editor = dialog(h.root);
   fill(field(editor, '标题'), '周末去看展');
@@ -309,7 +309,7 @@ function pickerFiles(editor: HTMLElement, files: File[]) {
 
 test('native file picker saves multiple images and a document, and attachment removal persists after reload', async t => {
   const h = fixture(t, createBoard());
-  button(h.root.querySelector('.moss-toolbar')!, '添加卡片').click();
+  button(h.root.querySelector('.linb-toolbar')!, '添加卡片').click();
   await settle();
   let editor = dialog(h.root);
   const files = [
@@ -359,7 +359,7 @@ test('native file picker saves multiple images and a document, and attachment re
 test('pasting an image starts a draft and later pastes append to the same editor without creating duplicate cards', async t => {
   const h = fixture(t, createBoard());
   const file = new File(['clipboard'], '粘贴图片.png', { type: 'image/png' });
-  const boardEvent = sendFiles(h.root.querySelector('.moss-wall')!, h.dom, 'paste', [file]);
+  const boardEvent = sendFiles(h.root.querySelector('.linb-kanban')!, h.dom, 'paste', [file]);
   await settle();
   assert.equal(boardEvent.defaultPrevented, true);
   const editor = dialog(h.root);
@@ -407,7 +407,7 @@ test('dropping files on a column selects that column and protects the editor whi
 
 test('editor keeps keyboard focus visible, guards unsaved text and blocks double submission while saving', async t => {
   const h = fixture(t, createBoard());
-  const add = button(h.root.querySelector('.moss-toolbar')!, '添加卡片');
+  const add = button(h.root.querySelector('.linb-toolbar')!, '添加卡片');
   add.focus();
   add.click();
   await settle();
@@ -518,10 +518,10 @@ test('editing a scrolled column preserves horizontal and vertical positions afte
   const board = sampleBoard();
   board.layout = 'columns';
   const h = fixture(t, board);
-  const columns = h.root.querySelector<HTMLElement>('.moss-columns')!;
-  const content = h.root.querySelector<HTMLElement>('.moss-content')!;
+  const columns = h.root.querySelector<HTMLElement>('.linb-columns')!;
+  const content = h.root.querySelector<HTMLElement>('.linb-content')!;
   const target = board.cards[2];
-  const listFor = (id: string) => h.root.querySelector<HTMLElement>(`[data-column-id="${id}"] .moss-column-list`)!;
+  const listFor = (id: string) => h.root.querySelector<HTMLElement>(`[data-column-id="${id}"] .linb-column-list`)!;
   columns.scrollLeft = 320;
   content.scrollTop = 64;
   listFor(board.columns[0].id).scrollTop = 140;
@@ -533,7 +533,7 @@ test('editing a scrolled column preserves horizontal and vertical positions afte
   fill(field(editor, '内容'), '编辑后仍停留在原来浏览的位置。');
   button(editor, '保存修改').click();
   await settle();
-  const refreshedColumns = h.root.querySelector<HTMLElement>('.moss-columns')!;
+  const refreshedColumns = h.root.querySelector<HTMLElement>('.linb-columns')!;
   assert.notEqual(refreshedColumns, columns, 'The test must exercise a replaced column container');
   assert.equal(refreshedColumns.scrollLeft, 320);
   assert.equal(content.scrollTop, 64);
@@ -558,7 +558,7 @@ test('mouse handle moves up, down, across columns and into an empty column witho
     assert.equal(grip.draggable, false);
     touchPointer(grip, h.dom, 'pointerdown', 30, 50, 'mouse');
     touchPointer(grip, h.dom, 'pointermove', x, y, 'mouse');
-    assert.ok(h.root.querySelector('.moss-drop-before, .moss-drop-after, .is-drop-target'));
+    assert.ok(h.root.querySelector('.linb-drop-before, .linb-drop-after, .is-drop-target'));
     touchPointer(grip, h.dom, 'pointerup', x, y, 'mouse');
     grip.click();
     assert.equal(h.root.querySelector('[role="menu"]'), null, 'Releasing a drag must not also open its menu');
@@ -579,7 +579,7 @@ test('mouse handle moves up, down, across columns and into an empty column witho
   assert.deepEqual(order(board.columns[2].id), [moving.id]);
   h.reopen();
   assert.equal(h.board().cards.find(item => item.id === moving.id)?.body, moving.body);
-  assert.equal(card(h.root, moving.id).closest<HTMLElement>('.moss-column')?.dataset.columnId, board.columns[2].id);
+  assert.equal(card(h.root, moving.id).closest<HTMLElement>('.linb-column')?.dataset.columnId, board.columns[2].id);
 });
 
 test('dropping in a gap between cards inserts at that position instead of appending', async t => {
@@ -587,7 +587,7 @@ test('dropping in a gap between cards inserts at that position instead of append
   const h = fixture(t, board); const moving = board.cards[2];
   const ids = [board.cards[0].id, board.cards[1].id, board.cards[3].id];
   ids.forEach((id, index) => bounds(card(h.root, id), 0, 100 + index * 200));
-  const list = h.root.querySelector<HTMLElement>(`[data-column-id="${board.columns[0].id}"] .moss-column-list`)!;
+  const list = h.root.querySelector<HTMLElement>(`[data-column-id="${board.columns[0].id}"] .linb-column-list`)!;
   Object.defineProperty(h.dom.window.document, 'elementFromPoint', { configurable: true, value: () => list });
   const grip = button(h.root, `移动卡片：${moving.title}`);
   touchPointer(grip, h.dom, 'pointerdown', 330, 100, 'mouse');
@@ -612,9 +612,9 @@ test('mouse wall dragging reorders cards and retains their assigned column', asy
 test('holding a dragged handle near a pane edge scrolls continuously and Escape cancels it', async t => {
   const board = sampleBoard(); board.layout = 'columns'; const h = fixture(t, board);
   const target = card(h.root, board.cards[2].id); bounds(target, 200, 50);
-  const columns = h.root.querySelector<HTMLElement>('.moss-columns')!; bounds(columns, 0, 0, 400, 600);
-  const list = target.closest('.moss-column')!.querySelector<HTMLElement>('.moss-column-list')!; bounds(list, 0, 0, 400, 600);
-  bounds(h.root.querySelector<HTMLElement>('.moss-content')!, 0, 0, 400, 600);
+  const columns = h.root.querySelector<HTMLElement>('.linb-columns')!; bounds(columns, 0, 0, 400, 600);
+  const list = target.closest('.linb-column')!.querySelector<HTMLElement>('.linb-column-list')!; bounds(list, 0, 0, 400, 600);
+  bounds(h.root.querySelector<HTMLElement>('.linb-content')!, 0, 0, 400, 600);
   Object.defineProperty(h.dom.window.document, 'elementFromPoint', { configurable: true, value: () => target });
   const grip = button(h.root, `移动卡片：${board.cards[0].title}`);
   touchPointer(grip, h.dom, 'pointerdown', 30, 50, 'mouse');
@@ -627,7 +627,7 @@ test('holding a dragged handle near a pane edge scrolls continuously and Escape 
   await new Promise(resolve => setTimeout(resolve, 35));
   assert.equal(columns.scrollLeft, stopped);
   assert.equal(h.operations.length, 0);
-  assert.equal(h.root.querySelector('.is-dragging, .moss-drop-before, .moss-drop-after'), null);
+  assert.equal(h.root.querySelector('.is-dragging, .linb-drop-before, .linb-drop-after'), null);
 });
 
 test('selection context menu converts only chosen lines and task checkboxes save into the card body', async t => {
@@ -636,7 +636,7 @@ test('selection context menu converts only chosen lines and task checkboxes save
     renderPreviewMarkdown(text, container);
     container.querySelectorAll('input').forEach(input => input.addEventListener('click', () => { nativeHandlerCalls++; }));
   });
-  button(h.root.querySelector('.moss-toolbar')!, '添加卡片').click(); await settle();
+  button(h.root.querySelector('.linb-toolbar')!, '添加卡片').click(); await settle();
   const editor = dialog(h.root); const body = field<HTMLTextAreaElement>(editor, '内容');
   fill(field(editor, '标题'), '清单'); fill(body, '说明\n1.完成色彩\n2.检查错误\n3.导出');
   body.focus(); body.setSelectionRange(body.value.indexOf('完成'), body.value.indexOf('3.'));
@@ -646,13 +646,13 @@ test('selection context menu converts only chosen lines and task checkboxes save
   assert.equal(body.value, '说明\n- [ ] 完成色彩\n- [ ] 检查错误\n3.导出');
   assert.equal(h.dom.window.document.activeElement, body);
   button(editor, '添加卡片').click(); await settle();
-  let inputs = h.root.querySelectorAll<HTMLInputElement>('.moss-card-body input[type=checkbox]');
+  let inputs = h.root.querySelectorAll<HTMLInputElement>('.linb-card-body input[type=checkbox]');
   assert.equal(inputs.length, 2); assert.equal(inputs[1].disabled, false);
   inputs[1].click(); await settle();
-  assert.equal(nativeHandlerCalls, 0, 'Native Markdown checkbox handlers must not write raw .moss lines');
+  assert.equal(nativeHandlerCalls, 0, 'Native Markdown checkbox handlers must not write raw .md lines');
   assert.equal(h.board().cards[0].body, '说明\n- [ ] 完成色彩\n- [x] 检查错误\n3.导出');
   h.reopen(); await settle();
-  inputs = h.root.querySelectorAll<HTMLInputElement>('.moss-card-body input[type=checkbox]');
+  inputs = h.root.querySelectorAll<HTMLInputElement>('.linb-card-body input[type=checkbox]');
   assert.deepEqual(Array.from(inputs, input => input.checked), [false, true]);
   inputs[1].click(); await settle();
   assert.equal(h.board().cards[0].body, '说明\n- [ ] 完成色彩\n- [ ] 检查错误\n3.导出');

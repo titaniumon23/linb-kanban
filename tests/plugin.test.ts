@@ -61,6 +61,7 @@ class MemoryVault extends Events {
     const parent = path.split('/').slice(0, -1).join('/') || '/';
     assert.ok(this.objects.get(parent) instanceof Folder, `Parent folder does not exist: ${parent}`);
   }
+  async cachedRead(file: VaultFile) { return this.read(file); }
   async read(file: VaultFile) {
     const text = this.text.get(file.path); assert.notEqual(text, undefined); return text!;
   }
@@ -84,7 +85,7 @@ class MemoryVault extends Events {
 }
 
 async function fixture(t: TestContext) {
-  const dom = new JSDOM('<!doctype html><html><body></body></html>', { url: 'https://moss.test/' });
+  const dom = new JSDOM('<!doctype html><html><body></body></html>', { url: 'https://linb.test/' });
   const globals = ['window', 'document', 'Element', 'HTMLElement', 'HTMLDivElement', 'Node', 'File', 'Event', 'KeyboardEvent'] as const;
   const descriptors = new Map(globals.map(name => [name, Object.getOwnPropertyDescriptor(globalThis, name)]));
   for (const name of globals) Object.defineProperty(globalThis, name, { configurable: true, writable: true, value: dom.window[name] });
@@ -105,6 +106,9 @@ async function fixture(t: TestContext) {
   const notices: string[] = [];
   const opened: string[] = [];
   const views: any[] = [];
+  const markdownLeaves: any[] = [];
+  const viewStates: any[] = [];
+  let layoutReady: () => unknown = () => {};
   const modals: any[] = [];
   const factories = new Map<string, (leaf: any) => any>();
   const extensions: { extensions: string[]; type: string }[] = [];
@@ -113,12 +117,14 @@ async function fixture(t: TestContext) {
   class Component {
     private disposers: (() => void)[] = [];
     load() {}
+    register(dispose: () => void) { this.disposers.push(dispose); }
     registerEvent(dispose: () => void) { this.disposers.push(dispose); }
     unload() { for (const dispose of this.disposers.splice(0)) dispose(); }
   }
   const workspace = Object.assign(new Events(), {
-    getLeavesOfType: (type: string) => views.filter(view => view.getViewType() === type).map(view => view.leaf),
-    getLeaf: (_mode: string) => ({ openFile: async (file: VaultFile) => { opened.push(file.path); } }),
+    getLeavesOfType: (type: string) => [...views.filter(view => view.getViewType() === type).map(view => view.leaf), ...markdownLeaves.filter(leaf => leaf.getViewState().type === type)],
+    getLeaf: (_mode: string) => ({ openFile: async (file: VaultFile) => { opened.push(file.path); }, setViewState: async (state: any) => { opened.push(state.state.file); viewStates.push(state); } }),
+    onLayoutReady: (callback: () => unknown) => { layoutReady = callback; },
     revealLeaf: async (_leaf: unknown) => {},
   });
   const app = { vault, workspace };
@@ -164,10 +170,16 @@ async function fixture(t: TestContext) {
     }
   });
   return {
-    vault, notices, opened, factories, extensions, commands, ribbons, modals,
+    vault, notices, opened, factories, extensions, commands, ribbons, modals, workspace, plugin, views, viewStates,
+    ready: () => layoutReady(),
+    note(file: VaultFile) {
+      let state = { type: 'markdown', state: { file: file.path } };
+      const leaf = { getViewState: () => state, setViewState: async (next: typeof state) => { state = next; viewStates.push(next); } };
+      markdownLeaves.push(leaf); return leaf;
+    },
     async load(file: VaultFile) {
-      const factory = factories.get('moss-wall-view'); assert.ok(factory);
-      const leaf: any = { app };
+      const factory = factories.get('linb-kanban-view'); assert.ok(factory);
+      const leaf: any = { app, setViewState: async (state: any) => { viewStates.push(state); }, getViewState: () => ({ type: 'linb-kanban-view', state: { file: file.path } }) };
       const view = factory(leaf); leaf.view = view; view.file = file; views.push(view);
       await view.onLoadFile(file); await settle(); return view;
     },
@@ -187,9 +199,9 @@ function fill(root: ParentNode, label: string, value: string) {
 
 test('compiled plugin registers its file view, extension, commands and ribbon without creating demo content', async t => {
   const h = await fixture(t);
-  assert.deepEqual(Array.from(h.factories.keys()), ['moss-wall-view']);
-  assert.deepEqual(h.extensions, [{ extensions: ['moss'], type: 'moss-wall-view' }]);
-  assert.deepEqual(h.commands.map(command => command.id), ['open-board', 'create-board', 'create-demo-board']);
+  assert.deepEqual(Array.from(h.factories.keys()), ['linb-kanban-view']);
+  assert.deepEqual(h.extensions, []);
+  assert.deepEqual(h.commands.map(command => command.id), ['open-board', 'create-board', 'create-demo-board', 'import-legacy-board']);
   assert.deepEqual(h.ribbons, [{ icon: 'copy-plus', title: '新建看板' }]);
   assert.deepEqual(h.vault.writes, []);
   assert.deepEqual(h.vault.getFiles(), []);
@@ -197,14 +209,14 @@ test('compiled plugin registers its file view, extension, commands and ribbon wi
 
 test('registered file view loads and saves real UI edits through vault.process, then reloads them', async t => {
   const h = await fixture(t);
-  const file = h.vault.seed('Moss Wall/测试.moss', serializeBoard(createBoard('插件集成测试')));
+  const file = h.vault.seed('LinB Kanban/测试.md', serializeBoard(createBoard('插件集成测试')));
   const view = await h.load(file);
-  assert.equal(view.getViewType(), 'moss-wall-view');
-  assert.equal(view.canAcceptExtension('moss'), true);
-  assert.equal(view.canAcceptExtension('md'), false);
+  assert.equal(view.getViewType(), 'linb-kanban-view');
+  assert.equal(view.canAcceptExtension('md'), true);
+  assert.equal(view.canAcceptExtension('json'), false);
   assert.match(view.contentEl.textContent, /插件集成测试/);
   assert.equal(h.vault.writes.length, 0);
-  button(view.contentEl.querySelector('.moss-toolbar')!, '添加卡片').click();
+  button(view.contentEl.querySelector('.linb-toolbar')!, '添加卡片').click();
   let editor = view.contentEl.querySelector('[role="dialog"]')!;
   fill(editor, '标题', '真实入口创建的卡片'); fill(editor, '内容', '**保留 Markdown** 与中文');
   button(editor, '添加卡片').click(); await settle();
@@ -225,13 +237,13 @@ test('registered file view loads and saves real UI edits through vault.process, 
 
 test('malformed board load displays a readable error and retry never rewrites the source', async t => {
   const h = await fixture(t);
-  const original = '{ damaged irreplaceable content';
-  const file = h.vault.seed('损坏.moss', original);
+  const original = '---\nlinb-kanban: 1\n---\n damaged irreplaceable content';
+  const file = h.vault.seed('损坏.md', original);
   const view = await h.load(file);
   const alert = view.contentEl.querySelector('[role="alert"]'); assert.ok(alert);
   assert.match(alert.textContent, /暂时无法读取/);
   assert.match(alert.textContent, /原文件未被修改/);
-  assert.equal(view.contentEl.querySelector('.moss-wall'), null);
+  assert.equal(view.contentEl.querySelector('.linb-kanban'), null);
   alert.querySelector('button').click(); await settle();
   assert.equal(h.vault.text.get(file.path), original);
   assert.deepEqual(h.vault.writes, []);
@@ -242,11 +254,11 @@ test('root-folder Markdown export uses a relative output path and keeps the orig
   const board = createBoard('根目录灵感');
   board.cards.push(createCard(board.columns[0].id, { title: '导出卡片', body: '**正文内容**', attachments: [{ path: '素材/图片 one.png', name: '图片 one.png', mime: 'image/png' }] }));
   const original = serializeBoard(board);
-  const file = h.vault.seed('根目录.moss', original);
+  const file = h.vault.seed('根目录.md', original);
   const view = await h.load(file);
   button(view.contentEl, '更多操作').click();
   button(view.contentEl.querySelector('[role="menu"]')!, '导出为 Markdown').click(); await settle();
-  const exported = h.vault.getFiles().find(item => item.extension === 'md'); assert.ok(exported);
+  const exported = h.vault.getFiles().find(item => item.path.endsWith(' - 导出.md')); assert.ok(exported);
   assert.equal(exported.path, '根目录灵感 - 导出.md');
   assert.equal(exported.parent.isRoot(), true);
   const markdown = h.vault.text.get(exported.path)!;
@@ -260,7 +272,7 @@ test('root-folder Markdown export uses a relative output path and keeps the orig
 test('real attachment importer gives unusual and long names safe unique vault paths while preserving extensions', async t => {
   const h = await fixture(t);
   const board = createBoard();
-  const file = h.vault.seed('灵感.moss', serializeBoard(board));
+  const file = h.vault.seed('灵感.md', serializeBoard(board));
   const view = await h.load(file);
   const names = ['../坏:名<>?/notes.JPG', `${'很长的名字'.repeat(60)}.WEBP`, '研究资料 #1?.pdf'];
   const files = names.map((name, index) => new MemoryFile([`attachment ${index}`], name));
@@ -269,7 +281,7 @@ test('real attachment importer gives unusual and long names safe unique vault pa
   assert.equal(new Set(attachments.map(item => item.path)).size, 3);
   for (const [index, attachment] of attachments.entries()) {
     const extension = ['jpg', 'webp', 'pdf'][index];
-    assert.ok(attachment.path.startsWith(`Moss Wall/附件/${board.id}/`));
+    assert.ok(attachment.path.startsWith(`LinB Kanban/附件/${board.id}/`));
     assert.match(attachment.path.split('/').at(-1)!, new RegExp(`^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}\\.${extension}$`));
     assert.ok(attachment.name.endsWith(`.${extension}`));
     assert.ok(attachment.name.length <= 95);
@@ -284,9 +296,9 @@ test('real attachment importer gives unusual and long names safe unique vault pa
 
 test('file picker uploads a picture and a document through the real vault host and reloads their saved references', async t => {
   const h = await fixture(t);
-  const file = h.vault.seed('移动端看板.moss', serializeBoard(createBoard('移动端附件')));
+  const file = h.vault.seed('移动端看板.md', serializeBoard(createBoard('移动端附件')));
   const view = await h.load(file);
-  button(view.contentEl.querySelector('.moss-toolbar')!, '添加卡片').click();
+  button(view.contentEl.querySelector('.linb-toolbar')!, '添加卡片').click();
   const editor = view.contentEl.querySelector('[role="dialog"]')!;
   const picker = editor.querySelector('input[type="file"]')! as HTMLInputElement;
   const uploads = [
@@ -328,9 +340,9 @@ test('vault image picker searches names and folders, reuses original files and a
   h.vault.seed('素材/活动/封面.png', 'another image');
   h.vault.seed('素材/备注.md', 'not an image');
   h.vault.seed('素材/项目.prproj', 'not an image');
-  const file = h.vault.seed('看板.moss', serializeBoard(createBoard()));
+  const file = h.vault.seed('看板.md', serializeBoard(createBoard()));
   const view = await h.load(file);
-  button(view.contentEl.querySelector('.moss-toolbar')!, '添加卡片').click();
+  button(view.contentEl.querySelector('.linb-toolbar')!, '添加卡片').click();
   const editor = view.contentEl.querySelector('[role="dialog"]')!;
   fill(editor, '内容', '正文保留。');
   const choose = button(editor, '从库中选图'); choose.click();
@@ -346,7 +358,7 @@ test('vault image picker searches names and folders, reuses original files and a
   picker.close(); picker.onChooseSuggestion(image); await settle();
   assert.equal(choose.disabled, false);
   choose.click(); picker = h.modals.at(-1); picker.close(); picker.onChooseSuggestion(image); await settle();
-  assert.equal(editor.querySelectorAll('.moss-editor-attachment').length, 1);
+  assert.equal(editor.querySelectorAll('.linb-editor-attachment').length, 1);
   assert.equal(h.vault.writes.length, 0, 'Selecting an existing image must not copy or modify files');
   button(editor, '添加卡片').click(); await settle();
   let board = parseBoard(h.vault.text.get(file.path)!);
@@ -366,13 +378,13 @@ test('vault image picker searches names and folders, reuses original files and a
 
 test('cancelling image selection keeps the draft editable, and unloading closes the picker', async t => {
   const h = await fixture(t); h.vault.seed('图片.png', 'image');
-  const file = h.vault.seed('看板.moss', serializeBoard(createBoard())); const view = await h.load(file);
-  button(view.contentEl.querySelector('.moss-toolbar')!, '添加卡片').click();
+  const file = h.vault.seed('看板.md', serializeBoard(createBoard())); const view = await h.load(file);
+  button(view.contentEl.querySelector('.linb-toolbar')!, '添加卡片').click();
   const editor = view.contentEl.querySelector('[role="dialog"]')!;
   fill(editor, '内容', '未保存的文字'); const choose = button(editor, '从库中选图'); choose.click();
   h.modals.at(-1).close(); await settle();
   assert.equal(choose.disabled, false); assert.equal(editor.querySelector('textarea')!.value, '未保存的文字');
-  assert.equal(editor.querySelectorAll('.moss-editor-attachment').length, 0);
+  assert.equal(editor.querySelectorAll('.linb-editor-attachment').length, 0);
   choose.click(); await view.onUnloadFile(); await settle();
   assert.equal(view.contentEl.querySelector('[role="dialog"]'), null);
   assert.deepEqual(h.vault.writes, []);
@@ -380,8 +392,8 @@ test('cancelling image selection keeps the draft editable, and unloading closes 
 
 test('missing or deleted vault images show a recoverable message without touching existing files', async t => {
   const h = await fixture(t);
-  const file = h.vault.seed('看板.moss', serializeBoard(createBoard())); const view = await h.load(file);
-  button(view.contentEl.querySelector('.moss-toolbar')!, '添加卡片').click();
+  const file = h.vault.seed('看板.md', serializeBoard(createBoard())); const view = await h.load(file);
+  button(view.contentEl.querySelector('.linb-toolbar')!, '添加卡片').click();
   const editor = view.contentEl.querySelector('[role="dialog"]')!;
   const choose = button(editor, '从库中选图'); choose.click(); await settle();
   assert.equal(h.modals.length, 0); assert.match(h.notices[0], /还没有图片/); assert.equal(choose.disabled, false);
@@ -389,6 +401,90 @@ test('missing or deleted vault images show a recoverable message without touchin
   const picker = h.modals.at(-1); assert.deepEqual(picker.getSuggestions(''), [image]);
   h.vault.objects.delete(image.path); picker.close(); picker.onChooseSuggestion(image); await settle();
   assert.match(editor.textContent, /已被删除/); assert.equal(choose.disabled, false);
-  assert.equal(editor.querySelectorAll('.moss-editor-attachment').length, 0);
+  assert.equal(editor.querySelectorAll('.linb-editor-attachment').length, 0);
   assert.deepEqual(h.vault.writes, []);
+});
+
+test('opening received Markdown automatically selects the board view and leaves ordinary notes alone', async t => {
+  const h = await fixture(t);
+  const board = createBoard('别人发来的看板'); board.layout = 'wall';
+  board.cards.push(createCard(board.columns[1].id, { color: 'lavender', body: '**正文**\n- [x] 完成' }));
+  const file = h.vault.seed('收到/看板.md', serializeBoard(board));
+  const ordinary = h.vault.seed('收到/普通笔记.md', '# 普通 Markdown');
+  const boardLeaf = h.note(file); const ordinaryLeaf = h.note(ordinary);
+  h.workspace.emit('file-open', file); await settle();
+  assert.deepEqual(boardLeaf.getViewState(), { type: 'linb-kanban-view', state: { file: file.path } });
+  assert.equal(ordinaryLeaf.getViewState().type, 'markdown');
+  const view = await h.load(file);
+  assert.match(view.contentEl.textContent, /别人发来的看板/);
+  assert.equal(view.contentEl.querySelector('article')?.dataset.cardColor, 'lavender');
+  assert.match(view.contentEl.textContent, /正文/);
+  assert.deepEqual(h.vault.writes, []);
+});
+
+test('restored Markdown tabs are recognized after layout readiness, and unloaded plugins stop routing', async t => {
+  const h = await fixture(t);
+  const file = h.vault.seed('恢复的看板.md', serializeBoard(createBoard()));
+  const leaf = h.note(file); h.ready(); await settle();
+  assert.equal(leaf.getViewState().type, 'linb-kanban-view');
+  const another = h.note(file); h.plugin.unload(); h.ready(); h.workspace.emit('file-open', file); await settle();
+  assert.equal(another.getViewState().type, 'markdown');
+});
+
+test('routing handles a tab switching files while its initial read is pending', async t => {
+  const h = await fixture(t);
+  const first = h.vault.seed('先打开.md', '# 笔记');
+  const second = h.vault.seed('后打开.md', serializeBoard(createBoard()));
+  let release!: () => void;
+  const gate = new Promise<void>(resolve => { release = resolve; });
+  const read = h.vault.cachedRead.bind(h.vault);
+  h.vault.cachedRead = async file => { if (file === first) await gate; return read(file); };
+  const leaf = h.note(first); h.workspace.emit('file-open', first);
+  await leaf.setViewState({ type: 'markdown', state: { file: second.path } });
+  h.workspace.emit('file-open', second); release(); await settle();
+  assert.deepEqual(leaf.getViewState(), { type: 'linb-kanban-view', state: { file: second.path } });
+  assert.deepEqual(h.vault.writes, []);
+});
+
+test('ordinary Markdown opened in an existing board pane returns to the native view', async t => {
+  const h = await fixture(t);
+  const file = h.vault.seed('普通笔记.md', '# 照常显示');
+  await h.load(file);
+  assert.deepEqual(h.viewStates, [{ type: 'markdown', state: { file: file.path } }]);
+  const jsonNote = h.vault.seed('JSON 笔记.md', '{\"example\":true}');
+  await h.load(jsonNote);
+  assert.deepEqual(h.viewStates.at(-1), { type: 'markdown', state: { file: jsonNote.path } });
+  assert.deepEqual(h.vault.writes, []);
+});
+
+test('new boards and exports use the LinB name, Markdown format and explicit board view', async t => {
+  const h = await fixture(t);
+  const board = createBoard('新建测试');
+  await (h.plugin as any).writeNewBoard(board);
+  const file = h.vault.getFiles()[0];
+  assert.equal(file.path, 'LinB Kanban/新建测试.md');
+  assert.deepEqual(parseBoard(h.vault.text.get(file.path)!), board);
+  assert.deepEqual(h.viewStates[0], { type: 'linb-kanban-view', state: { file: file.path } });
+  const view = await h.load(file);
+  button(view.contentEl, '更多操作').click();
+  button(view.contentEl.querySelector('[role="menu"]')!, '导出为 Markdown').click(); await settle();
+  const exported = h.vault.getFiles().find(item => item.path.endsWith(' - 导出.md'))!;
+  assert.deepEqual(parseBoard(h.vault.text.get(exported.path)!), board);
+  assert.equal(h.viewStates.at(-1).type, 'linb-kanban-view');
+});
+
+test('legacy import creates a new Markdown board without changing the old board or attachments', async t => {
+  const h = await fixture(t);
+  const board = createBoard('旧看板');
+  board.cards.push(createCard(board.columns[0].id, { attachments: [{ path: '旧附件/图片.png', name: '图片.png', mime: 'image/png' }] }));
+  const original = JSON.stringify(board);
+  const file = h.vault.seed('旧看板.moss', original);
+  const asset = h.vault.seed('旧附件/图片.png', 'image');
+  h.commands.find(command => command.id === 'import-legacy-board')!.callback();
+  const picker = h.modals.at(-1); assert.deepEqual(picker.getSuggestions(''), [file]);
+  picker.onChooseSuggestion(file); await settle();
+  assert.equal(h.vault.text.get(file.path), original);
+  assert.equal(h.vault.text.get(asset.path), 'image');
+  assert.deepEqual(parseBoard(h.vault.text.get('LinB Kanban/旧看板.md')!), board);
+  assert.equal(h.vault.writes.filter(write => write.kind === 'binary' || write.kind === 'process').length, 0);
 });

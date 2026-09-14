@@ -16,7 +16,7 @@ const PATHS: Record<string, string> = {
 };
 const CARD_COLORS: [CardColor, string][] = [['white', '默认'], ['gray', '石墨灰'], ['lavender', '淡紫'], ['sky', '雾蓝'], ['sage', '柔绿'], ['sand', '浅橙'], ['rose', '淡粉']];
 let sequence = 0;
-function id(prefix = 'moss'): string { return `${prefix}-${++sequence}-${createId()}`; }
+function id(prefix = 'linb'): string { return `${prefix}-${++sequence}-${createId()}`; }
 function el<K extends keyof HTMLElementTagNameMap>(tag: K, cls = '', text = ''): HTMLElementTagNameMap[K] {
   const node = document.createElement(tag); node.className = cls; if (text) node.textContent = text; return node;
 }
@@ -26,9 +26,9 @@ function icon(name: string): SVGSVGElement {
   svg.setAttribute('stroke-width', name === 'more' || name === 'grip' ? '3.5' : '1.65'); svg.setAttribute('stroke-linecap', 'round'); svg.setAttribute('stroke-linejoin', 'round');
   svg.setAttribute('aria-hidden', 'true'); const path = document.createElementNS(svg.namespaceURI, 'path'); path.setAttribute('d', PATHS[name] || PATHS.plus); svg.append(path); return svg;
 }
-function button(label: string, iconName?: string, cls = 'moss-button', action?: () => void): HTMLButtonElement {
+function button(label: string, iconName?: string, cls = 'linb-button', action?: () => void): HTMLButtonElement {
   const node = el('button', cls); node.type = 'button'; node.setAttribute('aria-label', label); if (iconName) node.append(icon(iconName));
-  if (!cls.includes('moss-icon-button')) node.append(el('span', '', label)); else node.title = label;
+  if (!cls.includes('linb-icon-button')) node.append(el('span', '', label)); else node.title = label;
   if (action) node.addEventListener('click', action); return node;
 }
 function clone<T>(value: T): T { return JSON.parse(JSON.stringify(value)); }
@@ -45,12 +45,12 @@ export class WallApp {
   private board: Board;
   private readonly host: WallHost;
   private readonly root: HTMLElement;
-  private readonly heading = el('span', 'moss-title');
-  private readonly saved = el('span', 'moss-save-status', '已保存');
-  private readonly content = el('main', 'moss-content');
+  private readonly heading = el('span', 'linb-title');
+  private readonly saved = el('span', 'linb-save-status', '已保存');
+  private readonly content = el('main', 'linb-content');
   private readonly wallButton: HTMLButtonElement;
   private readonly columnsButton: HTMLButtonElement;
-  private readonly toast = el('div', 'moss-toast');
+  private readonly toast = el('div', 'linb-toast');
   private renderVersion = 0;
   private pending = 0;
   private sheet: SheetState | null = null;
@@ -66,21 +66,21 @@ export class WallApp {
 
   constructor(container: HTMLElement, board: Board, host: WallHost) {
     this.board = clone(board); this.host = host;
-    this.root = el('div', 'moss-wall');
-    const titleButton = button('重命名', undefined, 'moss-title-button', () => this.openSettings()); titleButton.replaceChildren(this.heading);
-    const toolbar = el('div', 'moss-toolbar'); const modes = el('div', 'moss-modes'); modes.setAttribute('role', 'group'); modes.setAttribute('aria-label', '布局方式');
-    this.wallButton = button('墙', 'wall', 'moss-mode', () => this.changeLayout('wall'));
-    this.columnsButton = button('栏', 'columns', 'moss-mode', () => this.changeLayout('columns')); modes.append(this.columnsButton, this.wallButton);
-    const more = button('更多操作', 'more', 'moss-icon-button moss-board-more', () => this.openBoardMenu(more)); more.setAttribute('aria-haspopup', 'menu');
-    const tools = el('div', 'moss-toolbar-actions'); tools.append(button('添加卡片', 'plus', 'moss-button moss-primary', () => this.openEditor()), more);
+    this.root = el('div', 'linb-kanban');
+    const titleButton = button('重命名', undefined, 'linb-title-button', () => this.openSettings()); titleButton.replaceChildren(this.heading);
+    const toolbar = el('div', 'linb-toolbar'); const modes = el('div', 'linb-modes'); modes.setAttribute('role', 'group'); modes.setAttribute('aria-label', '布局方式');
+    this.wallButton = button('墙', 'wall', 'linb-mode', () => this.changeLayout('wall'));
+    this.columnsButton = button('栏', 'columns', 'linb-mode', () => this.changeLayout('columns')); modes.append(this.columnsButton, this.wallButton);
+    const more = button('更多操作', 'more', 'linb-icon-button linb-board-more', () => this.openBoardMenu(more)); more.setAttribute('aria-haspopup', 'menu');
+    const tools = el('div', 'linb-toolbar-actions'); tools.append(button('添加卡片', 'plus', 'linb-button linb-primary', () => this.openEditor()), more);
     toolbar.append(titleButton, modes, tools);
     this.content.setAttribute('aria-label', '卡片');
-    const body = el('div', 'moss-body'); body.append(toolbar, this.content);
+    const body = el('div', 'linb-body'); body.append(toolbar, this.content);
     this.saved.dataset.state = 'saved'; this.saved.setAttribute('role', 'status'); this.saved.setAttribute('aria-live', 'polite');
     this.toast.setAttribute('role', 'status'); this.toast.setAttribute('aria-live', 'polite'); this.toast.hidden = true;
     this.root.append(body, this.saved, this.toast); container.append(this.root);
     this.root.addEventListener('dragover', this.onBoardDragOver); this.root.addEventListener('drop', this.onBoardDrop);
-    this.root.addEventListener('dragleave', event => { if (!this.root.contains(event.relatedTarget as Node)) this.root.classList.remove('moss-file-over'); });
+    this.root.addEventListener('dragleave', event => { if (!this.root.contains(event.relatedTarget as Node)) this.root.classList.remove('linb-file-over'); });
     this.root.addEventListener('paste', event => { if (this.sheet) return; const files = Array.from(event.clipboardData?.files || []); if (files.length) { event.preventDefault(); this.openEditor(undefined, undefined, files); } });
     this.root.addEventListener('keydown', this.onKeyDown); document.addEventListener('pointerdown', this.onOutsidePointer);
     this.updateHeader(); this.renderContent();
@@ -125,72 +125,72 @@ export class WallApp {
   private renderContent(): void {
     const version = ++this.renderVersion; this.closeMenu(true);
     const focused = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-    const focusedCardId = focused?.closest<HTMLElement>('.moss-card')?.dataset.cardId;
+    const focusedCardId = focused?.closest<HTMLElement>('.linb-card')?.dataset.cardId;
     const focusClass = focused?.className;
     const contentScrollTop = this.content.scrollTop;
-    const columnsScrollLeft = this.content.querySelector<HTMLElement>('.moss-columns')?.scrollLeft || 0;
-    const columnScroll = new Map(Array.from(this.content.querySelectorAll<HTMLElement>('.moss-column')).map(column => [column.dataset.columnId, column.querySelector<HTMLElement>('.moss-column-list')?.scrollTop || 0]));
+    const columnsScrollLeft = this.content.querySelector<HTMLElement>('.linb-columns')?.scrollLeft || 0;
+    const columnScroll = new Map(Array.from(this.content.querySelectorAll<HTMLElement>('.linb-column')).map(column => [column.dataset.columnId, column.querySelector<HTMLElement>('.linb-column-list')?.scrollTop || 0]));
     const restoreFocus = () => {
       if (!focusedCardId || this.sheet) return;
-      const card = Array.from(this.content.querySelectorAll<HTMLElement>('.moss-card')).find(node => node.dataset.cardId === focusedCardId);
+      const card = Array.from(this.content.querySelectorAll<HTMLElement>('.linb-card')).find(node => node.dataset.cardId === focusedCardId);
       const control = card && Array.from(card.querySelectorAll<HTMLButtonElement>('button')).find(node => node.className === focusClass);
-      (control || card?.querySelector<HTMLButtonElement>('.moss-card-title') || this.root.querySelector<HTMLButtonElement>('.moss-toolbar-actions .moss-primary'))?.focus();
+      (control || card?.querySelector<HTMLButtonElement>('.linb-card-title') || this.root.querySelector<HTMLButtonElement>('.linb-toolbar-actions .linb-primary'))?.focus();
     };
     this.content.replaceChildren();
     const cards = this.board.cards;
     if (!this.board.cards.length && this.board.layout === 'wall') {
-      const empty = el('div', 'moss-empty');
+      const empty = el('div', 'linb-empty');
       empty.append(el('p', '', '还没有卡片'), el('small', '', '添加卡片，或拖入图片和文件。')); this.content.append(empty); restoreFocus(); return;
     }
     if (this.board.layout === 'wall') {
-      const wall = el('div', 'moss-grid'); wall.dataset.layout = 'wall'; cards.forEach(card => wall.append(this.renderCard(card, version)));
+      const wall = el('div', 'linb-grid'); wall.dataset.layout = 'wall'; cards.forEach(card => wall.append(this.renderCard(card, version)));
       wall.addEventListener('dragover', event => { if (this.draggedId && !this.hasFiles(event)) event.preventDefault(); });
       wall.addEventListener('drop', event => { if (!this.draggedId || this.hasFiles(event)) return; event.preventDefault(); event.stopPropagation(); this.commitDrop(this.draggedId, wall, event.clientX, event.clientY); this.clearDragState(); });
       this.content.append(wall);
     } else {
-      const columns = el('div', 'moss-columns');
+      const columns = el('div', 'linb-columns');
       this.board.columns.forEach(column => {
-        const section = el('section', 'moss-column'); section.dataset.columnId = column.id;
-        const header = el('div', 'moss-column-header'); const matching = cards.filter(card => card.columnId === column.id);
-        const title = button(column.title, undefined, 'moss-column-title', () => this.openColumnEditor(column.id)); title.setAttribute('aria-label', `编辑栏：${column.title}`);
-        header.append(title, el('span', 'moss-column-count', String(matching.length)));
-        const list = el('div', 'moss-column-list'); matching.forEach(card => list.append(this.renderCard(card, version)));
-        const add = button('添加卡片', 'plus', 'moss-column-add', () => this.openEditor(undefined, column.id)); add.setAttribute('aria-label', `向${column.title}添加卡片`);
+        const section = el('section', 'linb-column'); section.dataset.columnId = column.id;
+        const header = el('div', 'linb-column-header'); const matching = cards.filter(card => card.columnId === column.id);
+        const title = button(column.title, undefined, 'linb-column-title', () => this.openColumnEditor(column.id)); title.setAttribute('aria-label', `编辑栏：${column.title}`);
+        header.append(title, el('span', 'linb-column-count', String(matching.length)));
+        const list = el('div', 'linb-column-list'); matching.forEach(card => list.append(this.renderCard(card, version)));
+        const add = button('添加卡片', 'plus', 'linb-column-add', () => this.openEditor(undefined, column.id)); add.setAttribute('aria-label', `向${column.title}添加卡片`);
         section.append(header, list, add);
         section.addEventListener('dragover', event => { if (this.draggedId || this.hasFiles(event)) { event.preventDefault(); section.classList.add('is-drop-target'); } });
         section.addEventListener('dragleave', event => { if (!section.contains(event.relatedTarget as Node)) section.classList.remove('is-drop-target'); });
         section.addEventListener('drop', event => { section.classList.remove('is-drop-target'); if (!this.draggedId || this.hasFiles(event)) return; event.preventDefault(); event.stopPropagation(); this.commitDrop(this.draggedId, section, event.clientX, event.clientY); this.clearDragState(); });
         columns.append(section);
       });
-      columns.append(button('添加栏', 'plus', 'moss-add-column', () => this.openColumnEditor())); this.content.append(columns);
+      columns.append(button('添加栏', 'plus', 'linb-add-column', () => this.openColumnEditor())); this.content.append(columns);
     }
     this.content.scrollTop = contentScrollTop;
-    const columns = this.content.querySelector<HTMLElement>('.moss-columns');
+    const columns = this.content.querySelector<HTMLElement>('.linb-columns');
     if (columns) columns.scrollLeft = columnsScrollLeft;
-    this.content.querySelectorAll<HTMLElement>('.moss-column').forEach(column => {
-      const list = column.querySelector<HTMLElement>('.moss-column-list');
+    this.content.querySelectorAll<HTMLElement>('.linb-column').forEach(column => {
+      const list = column.querySelector<HTMLElement>('.linb-column-list');
       if (list) list.scrollTop = columnScroll.get(column.dataset.columnId) || 0;
     });
     restoreFocus();
   }
 
   private renderCard(card: WallCard, version: number): HTMLElement {
-    const article = el('article', 'moss-card'); article.dataset.cardId = card.id; article.dataset.cardColor = card.color;
+    const article = el('article', 'linb-card'); article.dataset.cardId = card.id; article.dataset.cardColor = card.color;
     const imageAttachment = card.attachments.find(attachment => attachment.mime.startsWith('image/'));
     if (imageAttachment) {
-      const cover = button(`打开图片：${imageAttachment.name}`, undefined, 'moss-card-cover', () => this.host.openAttachment(imageAttachment)); cover.replaceChildren();
+      const cover = button(`打开图片：${imageAttachment.name}`, undefined, 'linb-card-cover', () => this.host.openAttachment(imageAttachment)); cover.replaceChildren();
       const img = el('img'); img.src = this.host.resolveAsset(imageAttachment.path); img.alt = imageAttachment.name; img.loading = 'lazy'; img.draggable = false;
-      img.addEventListener('error', () => { cover.replaceChildren(icon('image'), el('span', '', '图片暂时无法显示')); cover.classList.add('moss-image-error'); }); cover.append(img); article.append(cover);
+      img.addEventListener('error', () => { cover.replaceChildren(icon('image'), el('span', '', '图片暂时无法显示')); cover.classList.add('linb-image-error'); }); cover.append(img); article.append(cover);
     }
-    const inner = el('div', 'moss-card-inner'); const head = el('div', 'moss-card-head');
-    const title = button(card.title || '未命名卡片', undefined, 'moss-card-title', () => this.openEditor(card));
-    const more = button(`卡片操作：${card.title || '未命名卡片'}`, 'more', 'moss-icon-button moss-card-more', () => this.openCardMenu(card, more)); more.setAttribute('aria-haspopup', 'menu');
-    const grip = button(`移动卡片：${card.title || '未命名卡片'}`, 'grip', 'moss-icon-button moss-card-grip', () => this.openCardMenu(card, grip)); grip.draggable = false;
+    const inner = el('div', 'linb-card-inner'); const head = el('div', 'linb-card-head');
+    const title = button(card.title || '未命名卡片', undefined, 'linb-card-title', () => this.openEditor(card));
+    const more = button(`卡片操作：${card.title || '未命名卡片'}`, 'more', 'linb-icon-button linb-card-more', () => this.openCardMenu(card, more)); more.setAttribute('aria-haspopup', 'menu');
+    const grip = button(`移动卡片：${card.title || '未命名卡片'}`, 'grip', 'linb-icon-button linb-card-grip', () => this.openCardMenu(card, grip)); grip.draggable = false;
     grip.setAttribute('aria-haspopup', 'menu'); grip.title = '拖动排序，或点按选择移动位置';
     this.bindPointerDrag(grip, article, card);
     head.append(grip, title, more); inner.append(head);
     if (card.body.trim()) {
-      const body = el('div', 'moss-card-body'); body.addEventListener('dblclick', event => { if (!(event.target as Element).closest('input')) this.openEditor(card); });
+      const body = el('div', 'linb-card-body'); body.addEventListener('dblclick', event => { if (!(event.target as Element).closest('input')) this.openEditor(card); });
       const staging = el('div');
       try {
         Promise.resolve(this.host.renderMarkdown(card.body, staging)).then(() => {
@@ -201,12 +201,12 @@ export class WallApp {
     }
     const safeUrl = safeExternalUrl(card.link);
     if (safeUrl) {
-      const link = button(new URL(safeUrl).hostname.replace(/^www\./, ''), 'link', 'moss-link-pill', () => this.host.openLink(safeUrl)); link.append(icon('arrow')); link.title = safeUrl; inner.append(link);
+      const link = button(new URL(safeUrl).hostname.replace(/^www\./, ''), 'link', 'linb-link-pill', () => this.host.openLink(safeUrl)); link.append(icon('arrow')); link.title = safeUrl; inner.append(link);
     }
     const otherAttachments = card.attachments.filter(attachment => attachment !== imageAttachment);
-    if (otherAttachments.length) { const attachments = el('div', 'moss-card-attachments'); otherAttachments.forEach(attachment => attachments.append(button(attachment.name, attachment.mime.startsWith('image/') ? 'image' : 'file', 'moss-attachment-link', () => this.host.openAttachment(attachment)))); inner.append(attachments); }
-    const footer = el('div', 'moss-card-footer'); const column = this.board.columns.find(item => item.id === card.columnId);
-    if (column && this.board.layout === 'wall') { footer.append(el('span', 'moss-card-column', column.title)); inner.append(footer); }
+    if (otherAttachments.length) { const attachments = el('div', 'linb-card-attachments'); otherAttachments.forEach(attachment => attachments.append(button(attachment.name, attachment.mime.startsWith('image/') ? 'image' : 'file', 'linb-attachment-link', () => this.host.openAttachment(attachment)))); inner.append(attachments); }
+    const footer = el('div', 'linb-card-footer'); const column = this.board.columns.find(item => item.id === card.columnId);
+    if (column && this.board.layout === 'wall') { footer.append(el('span', 'linb-card-column', column.title)); inner.append(footer); }
     article.append(inner);
     grip.addEventListener('dragstart', event => event.preventDefault());
     article.addEventListener('dragover', event => { if (this.draggedId && this.draggedId !== card.id) { event.preventDefault(); event.stopPropagation(); article.classList.add('is-drop-target'); } });
@@ -222,14 +222,14 @@ export class WallApp {
   private dropPosition(cardId: string, target: Element, clientX: number, clientY: number): { columnId: string; beforeId?: string; marker: HTMLElement; after: boolean } | null {
     const moving = this.board.cards.find(card => card.id === cardId);
     if (!moving || !this.root.contains(target)) return null;
-    let targetCardEl = target.closest<HTMLElement>('.moss-card');
+    let targetCardEl = target.closest<HTMLElement>('.linb-card');
     if (targetCardEl?.dataset.cardId === moving.id) return null;
-    const column = target.closest<HTMLElement>('.moss-column');
+    const column = target.closest<HTMLElement>('.linb-column');
     const columnId = this.board.layout === 'columns' ? column?.dataset.columnId : moving.columnId;
     if (!columnId) return null;
     const order = this.board.cards.filter(card => card.id !== moving.id && (this.board.layout === 'wall' || card.columnId === columnId));
     if (!targetCardEl) {
-      const elements = Array.from((column || this.content).querySelectorAll<HTMLElement>('.moss-card')).filter(node => node.dataset.cardId !== moving.id);
+      const elements = Array.from((column || this.content).querySelectorAll<HTMLElement>('.linb-card')).filter(node => node.dataset.cardId !== moving.id);
       if (this.board.layout === 'columns') {
         targetCardEl = elements.find(node => { const rect = node.getBoundingClientRect(); return clientY <= rect.top + rect.height / 2; }) || null;
         if (!targetCardEl) return { columnId, marker: elements.at(-1) || column!, after: true };
@@ -267,7 +267,7 @@ export class WallApp {
       if (!drag.active && Math.hypot(event.clientX - drag.startX, event.clientY - drag.startY) < 6) return;
       event.preventDefault();
       if (!drag.active) {
-        drag.active = true; this.draggedId = drag.id; article.classList.add('is-dragging'); this.root.classList.add('moss-drag-active');
+        drag.active = true; this.draggedId = drag.id; article.classList.add('is-dragging'); this.root.classList.add('linb-drag-active');
         const tick = () => { if (this.pointerDrag !== drag || !drag.active) return; this.updatePointerTarget(true); drag.scrollTimer = setTimeout(tick, 16); };
         drag.scrollTimer = setTimeout(tick, 16);
       }
@@ -293,22 +293,22 @@ export class WallApp {
     let hit = this.root.ownerDocument.elementFromPoint?.(clientX, clientY);
     if (scroll && hit && this.root.contains(hit)) {
       const step = (value: number, start: number, end: number) => value < start + 36 ? -10 : value > end - 36 ? 10 : 0;
-      const list = hit.closest('.moss-column')?.querySelector<HTMLElement>('.moss-column-list');
+      const list = hit.closest('.linb-column')?.querySelector<HTMLElement>('.linb-column-list');
       if (list) { const r = list.getBoundingClientRect(); list.scrollTop += step(clientY, r.top, r.bottom); }
       const r = this.content.getBoundingClientRect(); this.content.scrollTop += step(clientY, r.top, r.bottom);
-      const columns = this.content.querySelector<HTMLElement>('.moss-columns');
+      const columns = this.content.querySelector<HTMLElement>('.linb-columns');
       if (columns) { const r = columns.getBoundingClientRect(); columns.scrollLeft += step(clientX, r.left, r.right); }
       hit = this.root.ownerDocument.elementFromPoint?.(clientX, clientY);
     }
-    const target = hit?.closest('.moss-card, .moss-column, .moss-grid') || null;
-    this.root.querySelectorAll('.is-drop-target, .moss-drop-before, .moss-drop-after').forEach(node => node.classList.remove('is-drop-target', 'moss-drop-before', 'moss-drop-after'));
+    const target = hit?.closest('.linb-card, .linb-column, .linb-grid') || null;
+    this.root.querySelectorAll('.is-drop-target, .linb-drop-before, .linb-drop-after').forEach(node => node.classList.remove('is-drop-target', 'linb-drop-before', 'linb-drop-after'));
     drag.target = target && this.root.contains(target) ? target : null;
     const position = drag.target && this.dropPosition(drag.id, drag.target, clientX, clientY);
-    if (position) position.marker.classList.add(position.marker.classList.contains('moss-card') ? position.after ? 'moss-drop-after' : 'moss-drop-before' : 'is-drop-target');
+    if (position) position.marker.classList.add(position.marker.classList.contains('linb-card') ? position.after ? 'linb-drop-after' : 'linb-drop-before' : 'is-drop-target');
   }
   private clearDragState(): void {
-    this.draggedId = null; this.root.classList.remove('moss-drag-active');
-    this.root.querySelectorAll('.is-dragging, .is-drop-target, .moss-drop-before, .moss-drop-after').forEach(node => node.classList.remove('is-dragging', 'is-drop-target', 'moss-drop-before', 'moss-drop-after'));
+    this.draggedId = null; this.root.classList.remove('linb-drag-active');
+    this.root.querySelectorAll('.is-dragging, .is-drop-target, .linb-drop-before, .linb-drop-after').forEach(node => node.classList.remove('is-dragging', 'is-drop-target', 'linb-drop-before', 'linb-drop-after'));
   }
   private cancelPointerDrag(): void {
     const drag = this.pointerDrag; this.pointerDrag = null; clearTimeout(drag?.scrollTimer);
@@ -321,7 +321,7 @@ export class WallApp {
     const markers = taskMarkers(card.body);
     const rendered = Array.from(body.querySelectorAll<HTMLInputElement>('input.task-list-item-checkbox'));
     rendered.forEach((original, index) => {
-      // Replace host handlers: tasks belong to the card body, never to raw .moss JSON lines.
+      // Replace host handlers: staged card offsets are not offsets in the full Markdown board.
       const checkbox = el('input'); checkbox.type = 'checkbox'; checkbox.className = 'task-list-item-checkbox';
       checkbox.checked = original.checked; checkbox.disabled = rendered.length !== markers.length;
       checkbox.setAttribute('aria-label', `切换待办 ${index + 1}`); original.replaceWith(checkbox);
@@ -335,7 +335,7 @@ export class WallApp {
       const marker = markers[index]; if (!marker) return;
       const text = card.body.slice(0, marker.offset) + (marker.checked ? ' ' : 'x') + card.body.slice(marker.offset + 1);
       body.querySelectorAll<HTMLInputElement>('input.task-list-item-checkbox').forEach(input => { input.disabled = true; });
-      void this.operate({ type: 'card:update', id: card.id, patch: { body: text }, expectedUpdatedAt: card.updatedAt }).catch(error => {
+      void this.operate({ type: 'card:update', id: card.id, patch: { body: text }, expectedUpdatedAt: card.updatedAt, expectedBody: card.body }).catch(error => {
         if (body.isConnected) body.querySelectorAll<HTMLInputElement>('input.task-list-item-checkbox').forEach(input => { input.disabled = false; });
         this.showToast(this.errorMessage(error));
       });
@@ -343,9 +343,9 @@ export class WallApp {
   }
 
   private openBoardMenu(anchor: HTMLElement): void {
-    this.closeMenu(); const menu = el('div', 'moss-menu'); menu.setAttribute('role', 'menu');
+    this.closeMenu(); const menu = el('div', 'linb-menu'); menu.setAttribute('role', 'menu');
     const action = (label: string, symbol: string, run: () => void) => {
-      const item = button(label, symbol, 'moss-menu-item', () => { this.closeMenu(true); this.requestCloseSheet(run); }); item.setAttribute('role', 'menuitem'); menu.append(item);
+      const item = button(label, symbol, 'linb-menu-item', () => { this.closeMenu(true); this.requestCloseSheet(run); }); item.setAttribute('role', 'menuitem'); menu.append(item);
     };
     action('重命名', 'edit', () => this.openSettings());
     action('切换看板', 'folder', () => this.host.chooseBoard());
@@ -355,17 +355,17 @@ export class WallApp {
   }
 
   private openCardMenu(card: WallCard, anchor: HTMLElement): void {
-    this.closeMenu(); const menu = el('div', 'moss-menu'); menu.setAttribute('role', 'menu');
-    const action = (label: string, symbol: string, run: () => void, destructive = false) => { const b = button(label, symbol, `moss-menu-item${destructive ? ' moss-danger' : ''}`, () => { this.closeMenu(true); run(); }); b.setAttribute('role', 'menuitem'); menu.append(b); };
+    this.closeMenu(); const menu = el('div', 'linb-menu'); menu.setAttribute('role', 'menu');
+    const action = (label: string, symbol: string, run: () => void, destructive = false) => { const b = button(label, symbol, `linb-menu-item${destructive ? ' linb-danger' : ''}`, () => { this.closeMenu(true); run(); }); b.setAttribute('role', 'menuitem'); menu.append(b); };
     action('编辑卡片', 'edit', () => this.openEditor(card));
     const order = this.board.layout === 'wall' ? this.board.cards : this.board.cards.filter(item => item.columnId === card.columnId); const index = order.findIndex(item => item.id === card.id);
     if (index > 0) action('向前移动', 'up', () => void this.simpleOperation({ type: 'card:move', id: card.id, columnId: card.columnId, beforeId: order[index - 1].id }));
     if (index < order.length - 1) action('向后移动', 'down', () => void this.simpleOperation({ type: 'card:move', id: card.id, columnId: card.columnId, beforeId: order[index + 2]?.id }));
     if (this.board.columns.length > 1) {
-      menu.append(el('div', 'moss-menu-label', '移动到栏'));
+      menu.append(el('div', 'linb-menu-label', '移动到栏'));
       this.board.columns.filter(column => column.id !== card.columnId).forEach(column => action(column.title, 'columns', () => void this.simpleOperation({ type: 'card:move', id: card.id, columnId: column.id })));
     }
-    menu.append(el('div', 'moss-menu-divider')); action('删除卡片', 'trash', () => void this.deleteCard(card), true);
+    menu.append(el('div', 'linb-menu-divider')); action('删除卡片', 'trash', () => void this.deleteCard(card), true);
     this.showMenu(menu, anchor);
   }
   private showMenu(menu: HTMLElement, anchor: HTMLElement, point?: { x: number; y: number }): void {
@@ -377,18 +377,18 @@ export class WallApp {
   private closeMenu(restoreFocus = false): void { this.menu?.remove(); this.menu = null; if (restoreFocus && this.menuAnchor?.isConnected) this.menuAnchor.focus(); this.menuAnchor = null; }
   private async deleteCard(card: WallCard): Promise<void> {
     const original = clone(card); const beforeId = this.board.cards[this.board.cards.findIndex(item => item.id === card.id) + 1]?.id;
-    try { await this.operate({ type: 'card:delete', id: card.id, expectedUpdatedAt: card.updatedAt }); this.showToast('卡片已删除', '撤销', async () => { await this.operate({ type: 'card:add', card: original, beforeId: this.board.cards.some(item => item.id === beforeId) ? beforeId : undefined }); this.showToast('卡片已恢复'); }); }
+    try { await this.operate({ type: 'card:delete', id: card.id, expectedUpdatedAt: card.updatedAt, expectedBody: card.body }); this.showToast('卡片已删除', '撤销', async () => { await this.operate({ type: 'card:add', card: original, beforeId: this.board.cards.some(item => item.id === beforeId) ? beforeId : undefined }); this.showToast('卡片已恢复'); }); }
     catch (error) { this.showToast(this.errorMessage(error)); }
   }
 
   private createSheet(title: string, subtitle: string, dirty: () => boolean): { state: SheetState; content: HTMLElement; footer: HTMLElement; error: HTMLElement } {
     this.closeMenu(); this.closeSheet(); this.lastFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-    this.lastFocusCardId = this.lastFocus?.closest<HTMLElement>('.moss-card')?.dataset.cardId;
-    const overlay = el('div', 'moss-editor-overlay'); const panel = el('section', 'moss-editor'); panel.setAttribute('role', 'dialog'); panel.setAttribute('aria-modal', 'true'); panel.tabIndex = -1;
-    const header = el('div', 'moss-editor-header'); const heading = el('div'); const titleNode = el('h2', '', title); titleNode.id = id('moss-sheet-title'); panel.setAttribute('aria-labelledby', titleNode.id); heading.append(titleNode); if (subtitle) heading.append(el('p', '', subtitle));
-    header.append(heading, button('关闭编辑面板', 'close', 'moss-icon-button', () => this.requestCloseSheet()));
-    const guard = el('div', 'moss-unsaved'); guard.hidden = true; guard.append(el('p', '', '还有未保存的修改'), button('继续编辑', undefined, 'moss-button', () => { guard.hidden = true; panel.querySelector<HTMLElement>('input:not([type=file]), textarea, select')?.focus(); }), button('放弃修改', undefined, 'moss-button moss-danger', () => { const close = this.sheet?.close; this.closeSheet(); close?.(); }));
-    const content = el('div', 'moss-editor-content'); const error = el('div', 'moss-form-error'); error.hidden = true; error.setAttribute('role', 'alert'); const footer = el('div', 'moss-editor-footer');
+    this.lastFocusCardId = this.lastFocus?.closest<HTMLElement>('.linb-card')?.dataset.cardId;
+    const overlay = el('div', 'linb-editor-overlay'); const panel = el('section', 'linb-editor'); panel.setAttribute('role', 'dialog'); panel.setAttribute('aria-modal', 'true'); panel.tabIndex = -1;
+    const header = el('div', 'linb-editor-header'); const heading = el('div'); const titleNode = el('h2', '', title); titleNode.id = id('linb-sheet-title'); panel.setAttribute('aria-labelledby', titleNode.id); heading.append(titleNode); if (subtitle) heading.append(el('p', '', subtitle));
+    header.append(heading, button('关闭编辑面板', 'close', 'linb-icon-button', () => this.requestCloseSheet()));
+    const guard = el('div', 'linb-unsaved'); guard.hidden = true; guard.append(el('p', '', '还有未保存的修改'), button('继续编辑', undefined, 'linb-button', () => { guard.hidden = true; panel.querySelector<HTMLElement>('input:not([type=file]), textarea, select')?.focus(); }), button('放弃修改', undefined, 'linb-button linb-danger', () => { const close = this.sheet?.close; this.closeSheet(); close?.(); }));
+    const content = el('div', 'linb-editor-content'); const error = el('div', 'linb-form-error'); error.hidden = true; error.setAttribute('role', 'alert'); const footer = el('div', 'linb-editor-footer');
     panel.append(header, guard, content, error, footer); overlay.append(panel); this.root.append(overlay);
     const state: SheetState = { overlay, panel, guard, dirty, busy: false, close: () => {} }; this.sheet = state;
     overlay.addEventListener('click', event => { if (event.target === overlay) this.requestCloseSheet(); });
@@ -409,28 +409,28 @@ export class WallApp {
     if (!this.sheet) return; this.sheet.overlay.remove(); this.sheet = null;
     if (this.lastFocus?.isConnected) this.lastFocus.focus();
     else if (this.lastFocusCardId) {
-      const card = Array.from(this.content.querySelectorAll<HTMLElement>('.moss-card')).find(node => node.dataset.cardId === this.lastFocusCardId);
-      (card?.querySelector<HTMLButtonElement>('.moss-card-title') || this.root.querySelector<HTMLButtonElement>('.moss-toolbar-actions .moss-primary'))?.focus();
+      const card = Array.from(this.content.querySelectorAll<HTMLElement>('.linb-card')).find(node => node.dataset.cardId === this.lastFocusCardId);
+      (card?.querySelector<HTMLButtonElement>('.linb-card-title') || this.root.querySelector<HTMLButtonElement>('.linb-toolbar-actions .linb-primary'))?.focus();
     }
     this.lastFocus = null; this.lastFocusCardId = undefined;
   }
   private field(label: string, control: HTMLElement, hint = ''): HTMLElement {
-    const group = el('div', 'moss-field'); const key = id('moss-field'); control.id = key;
-    const labelNode = el('label', 'moss-field-label', label); labelNode.htmlFor = key; if (control instanceof HTMLDivElement) { labelNode.id = `${key}-label`; control.setAttribute('aria-labelledby', labelNode.id); } group.append(labelNode, control); if (hint) group.append(el('small', 'moss-field-hint', hint)); return group;
+    const group = el('div', 'linb-field'); const key = id('linb-field'); control.id = key;
+    const labelNode = el('label', 'linb-field-label', label); labelNode.htmlFor = key; if (control instanceof HTMLDivElement) { labelNode.id = `${key}-label`; control.setAttribute('aria-labelledby', labelNode.id); } group.append(labelNode, control); if (hint) group.append(el('small', 'linb-field-hint', hint)); return group;
   }
-  private input(value = '', placeholder = ''): HTMLInputElement { const input = el('input', 'moss-input'); input.type = 'text'; input.value = value; input.placeholder = placeholder; return input; }
+  private input(value = '', placeholder = ''): HTMLInputElement { const input = el('input', 'linb-input'); input.type = 'text'; input.value = value; input.placeholder = placeholder; return input; }
   private openEditor(card?: WallCard, columnId?: string, initialFiles?: File[]): void {
     if (this.sheet) { this.requestCloseSheet(() => this.openEditor(card, columnId, initialFiles)); return; }
     const original = card ? clone(card) : undefined; const draft = cardDraft(original, columnId || this.board.columns[0]?.id || ''); const initial = JSON.stringify(draft);
     const { state, content, footer, error } = this.createSheet(original ? '编辑卡片' : '添加卡片', '', () => JSON.stringify(draft) !== initial);
     const title = this.input(draft.title, '标题（可选）'); title.maxLength = 240; title.addEventListener('input', () => { draft.title = title.value; });
-    const body = el('textarea', 'moss-input moss-body-input'); body.value = draft.body || ''; body.placeholder = '写点内容…'; body.rows = 8; body.addEventListener('input', () => { draft.body = body.value; });
+    const body = el('textarea', 'linb-input linb-body-input'); body.value = draft.body || ''; body.placeholder = '写点内容…'; body.rows = 8; body.addEventListener('input', () => { draft.body = body.value; });
     body.addEventListener('contextmenu', event => {
       if (state.busy || body.selectionStart === body.selectionEnd || !body.value.slice(body.selectionStart, body.selectionEnd).trim()) return;
       event.preventDefault(); event.stopPropagation(); this.closeMenu();
       const start = body.selectionStart; const end = body.selectionEnd;
-      const menu = el('div', 'moss-menu'); menu.setAttribute('role', 'menu');
-      const convert = button('转为待办复选框', 'check', 'moss-menu-item', () => {
+      const menu = el('div', 'linb-menu'); menu.setAttribute('role', 'menu');
+      const convert = button('转为待办复选框', 'check', 'linb-menu-item', () => {
         this.closeMenu(true);
         if (this.sheet !== state || state.busy) return;
         const converted = taskifySelection(body.value, start, end);
@@ -439,35 +439,35 @@ export class WallApp {
       convert.setAttribute('role', 'menuitem'); menu.append(convert);
       this.showMenu(menu, body, event.clientX || event.clientY ? { x: event.clientX, y: event.clientY } : undefined);
     });
-    const column = el('select', 'moss-input'); this.board.columns.forEach(item => { const option = el('option', '', item.title); option.value = item.id; column.append(option); }); column.value = draft.columnId || ''; column.addEventListener('change', () => { draft.columnId = column.value; });
-    const color = el('select', 'moss-input moss-color-select');
+    const column = el('select', 'linb-input'); this.board.columns.forEach(item => { const option = el('option', '', item.title); option.value = item.id; column.append(option); }); column.value = draft.columnId || ''; column.addEventListener('change', () => { draft.columnId = column.value; });
+    const color = el('select', 'linb-input linb-color-select');
     CARD_COLORS.forEach(([value, label]) => { const option = el('option', '', label); option.value = value; color.append(option); });
     color.value = draft.color || 'white'; color.dataset.cardColor = color.value;
     color.addEventListener('change', () => { draft.color = color.value as CardColor; color.dataset.cardColor = color.value; });
     const url = this.input(draft.link, 'https://'); url.type = 'url'; url.addEventListener('input', () => { draft.link = url.value; url.removeAttribute('aria-invalid'); });
     content.append(this.field('标题', title), this.field('卡片颜色', color), this.field('内容', body, '支持 Markdown；选中文字后右键可转为待办'), this.field('所属分栏', column), this.field('链接（可选）', url));
-    const attachments = el('div', 'moss-editor-attachments');
-    const picker = el('input', 'moss-file-input'); picker.type = 'file'; picker.multiple = true; picker.tabIndex = -1; picker.setAttribute('aria-label', '选择图片或附件');
-    const addImage = button('添加附件', 'file', 'moss-upload-button', () => picker.click());
-    const chooseImage = button('从库中选图', 'image', 'moss-upload-button moss-vault-pick', () => void chooseExistingImage());
+    const attachments = el('div', 'linb-editor-attachments');
+    const picker = el('input', 'linb-file-input'); picker.type = 'file'; picker.multiple = true; picker.tabIndex = -1; picker.setAttribute('aria-label', '选择图片或附件');
+    const addImage = button('添加附件', 'file', 'linb-upload-button', () => picker.click());
+    const chooseImage = button('从库中选图', 'image', 'linb-upload-button linb-vault-pick', () => void chooseExistingImage());
     chooseImage.disabled = !this.host.chooseVaultImages;
     if (!this.host.chooseVaultImages) chooseImage.title = '请在 Obsidian 中使用，网页预览无法读取笔记库';
-    const uploadActions = el('div', 'moss-upload-actions'); uploadActions.append(addImage, chooseImage);
-    const uploadHint = el('span', 'moss-upload-hint', this.host.chooseVaultImages ? '上传新文件，或直接引用库内图片' : '支持拖入或粘贴；从库中选图需在 Obsidian 中使用');
-    const upload = el('div', 'moss-upload'); upload.append(uploadActions, uploadHint, picker);
+    const uploadActions = el('div', 'linb-upload-actions'); uploadActions.append(addImage, chooseImage);
+    const uploadHint = el('span', 'linb-upload-hint', this.host.chooseVaultImages ? '上传新文件，或直接引用库内图片' : '支持拖入或粘贴；从库中选图需在 Obsidian 中使用');
+    const upload = el('div', 'linb-upload'); upload.append(uploadActions, uploadHint, picker);
     content.append(this.field('图片与附件', attachments), upload);
     const renderAttachments = () => {
       attachments.replaceChildren(); (draft.attachments || []).forEach((attachment, index) => {
-        const figure = el('div', 'moss-editor-attachment');
+        const figure = el('div', 'linb-editor-attachment');
         if (attachment.mime.startsWith('image/')) { const img = el('img'); img.src = this.host.resolveAsset(attachment.path); img.alt = attachment.name; figure.append(img); }
         else figure.append(icon('file'));
         const name = el('span', '', attachment.name); name.title = attachment.name;
-        figure.append(name, button(`移除附件：${attachment.name}`, 'close', 'moss-icon-button', () => { draft.attachments?.splice(index, 1); renderAttachments(); })); attachments.append(figure);
+        figure.append(name, button(`移除附件：${attachment.name}`, 'close', 'linb-icon-button', () => { draft.attachments?.splice(index, 1); renderAttachments(); })); attachments.append(figure);
       });
     };
     renderAttachments();
-    const cancel = button('取消', undefined, 'moss-button', () => this.requestCloseSheet());
-    const save = button(original ? '保存修改' : '添加卡片', 'check', 'moss-button moss-primary', () => void submit());
+    const cancel = button('取消', undefined, 'linb-button', () => this.requestCloseSheet());
+    const save = button(original ? '保存修改' : '添加卡片', 'check', 'linb-button linb-primary', () => void submit());
     footer.append(cancel, save);
     const setBusy = (busy: boolean, text = '') => { this.setSheetBusy(state, busy); save.disabled = busy; cancel.disabled = busy; addImage.disabled = busy; chooseImage.disabled = busy || !this.host.chooseVaultImages; save.querySelector('span')!.textContent = busy ? text : original ? '保存修改' : '添加卡片'; };
     const chooseExistingImage = async () => {
@@ -500,7 +500,7 @@ export class WallApp {
       if (!this.board.columns.some(item => item.id === draft.columnId)) { error.textContent = '这个分栏已经不存在，请选择其他分栏后保存。'; error.hidden = false; return; }
       setBusy(true, '正在保存…');
       try {
-        if (original) await this.operate({ type: 'card:update', id: original.id, patch: clone(draft), expectedUpdatedAt: original.updatedAt });
+        if (original) await this.operate({ type: 'card:update', id: original.id, patch: clone(draft), expectedUpdatedAt: original.updatedAt, expectedBody: original.body });
         else { const created = createCard(draft.columnId || '', clone(draft)); await this.operate({ type: 'card:add', card: created }); }
         if (this.sheet === state) this.closeSheet(); this.showToast(original ? '卡片已更新' : '卡片已添加');
       } catch (failure) { if (this.sheet === state) { error.hidden = false; error.textContent = `${this.errorMessage(failure)} 你的内容仍保留在这里，可以复制后重试。`; } }
@@ -516,9 +516,9 @@ export class WallApp {
     const draft = { title: this.board.title, description: this.board.description }; const initial = JSON.stringify(draft);
     const { state, content, footer, error } = this.createSheet('重命名', '', () => JSON.stringify(draft) !== initial);
     const title = this.input(draft.title, '看板名称'); title.maxLength = 120; title.addEventListener('input', () => { draft.title = title.value; });
-    const description = el('textarea', 'moss-input'); description.rows = 3; description.value = draft.description; description.placeholder = '说明（可选）'; description.addEventListener('input', () => { draft.description = description.value; });
+    const description = el('textarea', 'linb-input'); description.rows = 3; description.value = draft.description; description.placeholder = '说明（可选）'; description.addEventListener('input', () => { draft.description = description.value; });
     content.append(this.field('名称', title), this.field('说明（可选）', description));
-    const cancel = button('取消', undefined, 'moss-button', () => this.requestCloseSheet()); const save = button('保存', 'check', 'moss-button moss-primary', async () => {
+    const cancel = button('取消', undefined, 'linb-button', () => this.requestCloseSheet()); const save = button('保存', 'check', 'linb-button linb-primary', async () => {
       if (state.busy) return; if (!draft.title.trim()) { error.textContent = '请填写看板名称。'; error.hidden = false; title.focus(); return; }
       this.setSheetBusy(state, true); save.disabled = true; error.hidden = true;
       try { await this.operate({ type: 'board:update', patch: { ...draft, title: draft.title.trim() } }); if (this.sheet === state) this.closeSheet(); this.showToast('已保存'); }
@@ -534,14 +534,14 @@ export class WallApp {
     const title = this.input(draft.title, '栏名称'); title.maxLength = 80; title.addEventListener('input', () => { draft.title = title.value; });
     content.append(this.field('栏名称', title));
     if (column && this.board.columns.length > 1) {
-      const transfer = el('select', 'moss-input'); this.board.columns.filter(item => item.id !== column.id).forEach(item => { const option = el('option', '', item.title); option.value = item.id; transfer.append(option); });
-      const removal = el('div', 'moss-column-removal'); removal.append(el('p', '', '删除栏时，将卡片移动到：'), transfer, button('删除此栏', 'trash', 'moss-button moss-danger', async () => {
+      const transfer = el('select', 'linb-input'); this.board.columns.filter(item => item.id !== column.id).forEach(item => { const option = el('option', '', item.title); option.value = item.id; transfer.append(option); });
+      const removal = el('div', 'linb-column-removal'); removal.append(el('p', '', '删除栏时，将卡片移动到：'), transfer, button('删除此栏', 'trash', 'linb-button linb-danger', async () => {
         if (state.busy) return; this.setSheetBusy(state, true);
         try { await this.operate({ type: 'column:delete', id: column.id, moveToId: transfer.value }); if (this.sheet === state) this.closeSheet(); this.showToast('栏已删除，卡片已转移'); }
         catch (failure) { error.textContent = this.errorMessage(failure); error.hidden = false; } finally { this.setSheetBusy(state, false); }
       })); content.append(removal);
     }
-    const cancel = button('取消', undefined, 'moss-button', () => this.requestCloseSheet()); const save = button(column ? '保存栏' : '添加栏', 'check', 'moss-button moss-primary', async () => {
+    const cancel = button('取消', undefined, 'linb-button', () => this.requestCloseSheet()); const save = button(column ? '保存栏' : '添加栏', 'check', 'linb-button linb-primary', async () => {
       if (state.busy) return; if (!draft.title.trim()) { error.textContent = '请填写栏名称。'; error.hidden = false; title.focus(); return; }
       this.setSheetBusy(state, true); save.disabled = true; error.hidden = true;
       try { await this.operate(column ? { type: 'column:update', id: column.id, patch: { title: draft.title.trim() } } : { type: 'column:add', column: { id: id('column'), title: draft.title.trim(), color: 'white' } }); if (this.sheet === state) this.closeSheet(); this.showToast(column ? '栏已更新' : '栏已添加'); }
@@ -552,16 +552,16 @@ export class WallApp {
 
   private showToast(message: string, actionLabel?: string, action?: () => Promise<void>): void {
     if (this.destroyed) return; clearTimeout(this.toastTimer); this.toast.replaceChildren(el('span', '', message));
-    if (actionLabel && action) { const actionButton = button(actionLabel, undefined, 'moss-toast-action', async () => { clearTimeout(this.toastTimer); actionButton.disabled = true; try { await action(); } catch (failure) { this.showToast(this.errorMessage(failure)); } }); this.toast.append(actionButton); }
-    this.toast.append(button('关闭提示', 'close', 'moss-icon-button', () => { this.toast.hidden = true; })); this.toast.hidden = false;
+    if (actionLabel && action) { const actionButton = button(actionLabel, undefined, 'linb-toast-action', async () => { clearTimeout(this.toastTimer); actionButton.disabled = true; try { await action(); } catch (failure) { this.showToast(this.errorMessage(failure)); } }); this.toast.append(actionButton); }
+    this.toast.append(button('关闭提示', 'close', 'linb-icon-button', () => { this.toast.hidden = true; })); this.toast.hidden = false;
     this.toastTimer = setTimeout(() => { this.toast.hidden = true; }, action ? 15000 : 6500);
   }
   private hasFiles(event: DragEvent): boolean { return Array.from(event.dataTransfer?.types || []).includes('Files'); }
-  private onBoardDragOver = (event: DragEvent): void => { if (this.hasFiles(event)) { event.preventDefault(); if (event.dataTransfer) event.dataTransfer.dropEffect = 'copy'; this.root.classList.add('moss-file-over'); } };
+  private onBoardDragOver = (event: DragEvent): void => { if (this.hasFiles(event)) { event.preventDefault(); if (event.dataTransfer) event.dataTransfer.dropEffect = 'copy'; this.root.classList.add('linb-file-over'); } };
   private onBoardDrop = (event: DragEvent): void => {
-    this.root.classList.remove('moss-file-over'); this.root.querySelectorAll('.is-drop-target').forEach(node => node.classList.remove('is-drop-target')); if (!this.hasFiles(event)) return; event.preventDefault(); event.stopPropagation();
+    this.root.classList.remove('linb-file-over'); this.root.querySelectorAll('.is-drop-target').forEach(node => node.classList.remove('is-drop-target')); if (!this.hasFiles(event)) return; event.preventDefault(); event.stopPropagation();
     const files = Array.from(event.dataTransfer?.files || []); if (!files.length) return;
-    const columnId = (event.target instanceof Element ? event.target.closest<HTMLElement>('.moss-column')?.dataset.columnId : undefined);
+    const columnId = (event.target instanceof Element ? event.target.closest<HTMLElement>('.linb-column')?.dataset.columnId : undefined);
     if (this.sheet?.onFiles) void this.sheet.onFiles(files); else if (this.sheet) this.showToast('请先保存或关闭当前面板，再添加附件'); else this.openEditor(undefined, columnId, files);
   };
   private onOutsidePointer = (event: PointerEvent): void => { if (this.menu && !this.menu.contains(event.target as Node) && !this.menuAnchor?.contains(event.target as Node)) this.closeMenu(); };

@@ -15,8 +15,8 @@ export type CardPatch = Partial<Pick<WallCard, 'title' | 'body' | 'color' | 'col
 export type BoardOperation =
   | { type: 'board:update'; patch: Partial<Pick<Board, 'title' | 'description' | 'layout' | 'background'>> }
   | { type: 'card:add'; card: WallCard; beforeId?: string }
-  | { type: 'card:update'; id: string; patch: CardPatch; expectedUpdatedAt?: string }
-  | { type: 'card:delete'; id: string; expectedUpdatedAt?: string }
+  | { type: 'card:update'; id: string; patch: CardPatch; expectedUpdatedAt?: string; expectedBody?: string }
+  | { type: 'card:delete'; id: string; expectedUpdatedAt?: string; expectedBody?: string }
   | { type: 'card:move'; id: string; columnId: string; beforeId?: string }
   | { type: 'column:add'; column: WallColumn }
   | { type: 'column:update'; id: string; patch: Partial<Pick<WallColumn, 'title' | 'color'>> }

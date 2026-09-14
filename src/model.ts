@@ -114,7 +114,7 @@ function copy<T>(value: T): T {
 
 export function createId(): string {
   if (typeof globalThis.crypto?.randomUUID === 'function') return globalThis.crypto.randomUUID();
-  return `moss-${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}-${Math.random().toString(36).slice(2)}`;
+  return `linb-${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}-${Math.random().toString(36).slice(2)}`;
 }
 
 export function createBoard(title = '未命名看板'): Board {
@@ -148,20 +148,55 @@ export function createCard(columnId: string, patch: CardPatch = {}): WallCard {
   return card;
 }
 
-export function parseBoard(text: string): Board {
-  let value: unknown;
-  try {
-    value = JSON.parse(text);
-  } catch {
-    fail('无法读取看板：文件不是有效 JSON。原文件未被修改。');
-  }
-  validateBoard(value);
-  return value;
+/** Only marked Markdown notes belong to this plugin; ordinary notes are untouched. */
+export function isBoardMarkdown(text: string): boolean {
+  const frontmatter = /^\uFEFF?---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/.exec(text);
+  return !!frontmatter && /^linb-kanban: *1 *$/m.test(frontmatter[1].replace(/\r/g, ''));
 }
 
-export function serializeBoard(board: Board): string {
+export function parseBoard(text: string): Board {
+  // Read-only compatibility for importing earlier JSON boards.
+  if (text.trimStart().startsWith('{')) {
+    let value: unknown;
+    try { value = JSON.parse(text); }
+    catch { fail('无法读取旧版看板：文件不是有效 JSON。原文件未被修改。'); }
+    validateBoard(value);
+    return value;
+  }
+  if (!isBoardMarkdown(text)) fail('这不是 LinB Kanban 看板，或文件格式版本不受支持。原文件未被修改。');
+  const metadata = /\n<!-- linb-kanban:data ([^\r\n]+) -->\s*$/.exec(text);
+  if (!metadata) fail('看板信息缺失，请保留文件末尾的 LinB Kanban 信息。');
+  let data: Record<string, unknown>;
+  try { data = record(JSON.parse(metadata[1]), '看板信息'); }
+  catch { fail('看板信息损坏。原文件未被修改。'); }
+  if (data.format !== 1) fail('此 Markdown 看板版本不受支持，请更新插件。');
+  string(data.fromFolder, '看板文件夹', 2_048);
+  const candidate = record(data.board, '看板');
+  if (!Array.isArray(candidate.cards)) fail('卡片列表不正确。');
+  const board = { ...candidate, cards: candidate.cards.map(value => ({ ...record(value, '卡片'), body: '' })) };
   validateBoard(board);
-  return `${JSON.stringify(board, null, 2)}\n`;
+  const bodies = new Map<string, string>();
+  const pattern = /<!-- linb-kanban:body ([a-zA-Z0-9_-]+) -->\r?\n([\s\S]*?)\r?\n<!-- linb-kanban:end-body \1 -->/g;
+  for (const match of text.slice(0, metadata.index).matchAll(pattern)) {
+    if (bodies.has(match[1])) fail('卡片正文标记重复，请保留原文件。');
+    bodies.set(match[1], match[2]);
+  }
+  if (bodies.size !== board.cards.length) fail('卡片正文标记缺失或重复，请保留原文件。');
+  for (const card of board.cards) {
+    if (!bodies.has(card.id)) fail('卡片正文标记缺失，请保留原文件。');
+    card.body = bodies.get(card.id)!;
+  }
+  validateBoard(board);
+  // Body text is authoritative. Reject unsupported source edits instead of silently discarding them.
+  const normalized = (value: string) => value.replace(/^\uFEFF/, '').replace(/\r\n/g, '\n').trimEnd();
+  if (normalized(text) !== normalized(exportMarkdown(board, data.fromFolder))) {
+    fail('看板标题、分栏或附件结构在源码中有改动。请保留原文件，在看板界面修改这些内容；正文可在卡片正文标记之间编辑。');
+  }
+  return board;
+}
+
+export function serializeBoard(board: Board, fromFolder = ''): string {
+  return exportMarkdown(board, fromFolder);
 }
 
 function validatePatch(value: unknown, allowed: string[]): void {
@@ -179,8 +214,8 @@ function findCard(board: Board, cardId: string): WallCard {
   return board.cards.find((card) => card.id === cardId) ?? fail('卡片已不存在，请刷新后重试。');
 }
 
-function checkConflict(card: WallCard, expectedUpdatedAt?: string): void {
-  if (expectedUpdatedAt !== undefined && expectedUpdatedAt !== card.updatedAt) {
+function checkConflict(card: WallCard, expectedUpdatedAt?: string, expectedBody?: string): void {
+  if ((expectedUpdatedAt !== undefined && expectedUpdatedAt !== card.updatedAt) || (expectedBody !== undefined && expectedBody !== card.body)) {
     fail('这张卡片已在其他窗口修改。请重新打开卡片后再保存，避免覆盖新内容。');
   }
 }
@@ -211,14 +246,14 @@ export function applyOperation(board: Board, operation: BoardOperation): Board {
       break;
     case 'card:update': {
       const card = findCard(next, operation.id);
-      checkConflict(card, operation.expectedUpdatedAt);
+      checkConflict(card, operation.expectedUpdatedAt, operation.expectedBody);
       validatePatch(operation.patch, ['title', 'body', 'color', 'columnId', 'attachments', 'link']);
       Object.assign(card, copy(operation.patch), { updatedAt: nextTimestamp(card.updatedAt) });
       break;
     }
     case 'card:delete': {
       const card = findCard(next, operation.id);
-      checkConflict(card, operation.expectedUpdatedAt);
+      checkConflict(card, operation.expectedUpdatedAt, operation.expectedBody);
       next.cards = next.cards.filter((existing) => existing.id !== card.id);
       break;
     }
@@ -285,13 +320,15 @@ function relativeAttachmentPath(path: string, fromFolder: string): string {
 export function exportMarkdown(board: Board, fromFolder = ''): string {
   validateBoard(board);
   if (fromFolder) validateAttachment({ path: fromFolder, name: '导出文件夹', mime: '' });
-  const lines = [`# ${heading(board.title)}`, ''];
+  const lines = ['---', 'linb-kanban: 1', '---', '', `# ${heading(board.title)}`, ''];
+  if (board.description.includes('<!-- linb-kanban:')) fail('看板描述不能包含 LinB Kanban 内部标记。');
   if (board.description) lines.push(board.description, '');
   for (const column of board.columns) {
     lines.push(`## ${heading(column.title)}`, '');
     for (const card of board.cards.filter((entry) => entry.columnId === column.id)) {
       lines.push(`### ${heading(card.title || '未命名卡片')}`, '');
-      if (card.body) lines.push(card.body, '');
+      if (card.body.includes('<!-- linb-kanban:')) fail('正文不能包含 LinB Kanban 内部标记，请移除该标记后保存。');
+      lines.push(`<!-- linb-kanban:body ${card.id} -->`, card.body, `<!-- linb-kanban:end-body ${card.id} -->`, '');
       if (card.link) lines.push(`[打开链接](<${safeExternalUrl(card.link)}>)`, '');
       for (const attachment of card.attachments) {
         const image = attachment.mime.startsWith('image/') ? '!' : '';
@@ -299,6 +336,9 @@ export function exportMarkdown(board: Board, fromFolder = ''): string {
       }
     }
   }
+  const metadata = { format: 1, fromFolder, board: { ...board, cards: board.cards.map(({ body: _body, ...card }) => card) } };
+  const json = JSON.stringify(metadata).replace(/[<>&-]/g, character => `\\u${character.charCodeAt(0).toString(16).padStart(4, '0')}`);
+  lines.push(`<!-- linb-kanban:data ${json} -->`);
   return `${lines.join('\n').trimEnd()}\n`;
 }
 
