@@ -1,8 +1,10 @@
-import { App, Component, FileView, MarkdownRenderer, Modal, Notice, Plugin, Setting, SuggestModal, TFile, TFolder, WorkspaceLeaf, normalizePath } from 'obsidian';
+import { t, setLanguage } from './i18n';
+import { App, Component, FileView, MarkdownRenderer, Modal, Notice, Plugin, Setting, SuggestModal, TFile, TFolder, WorkspaceLeaf, normalizePath, requestUrl, getLanguage } from 'obsidian';
 import { createBoard, createDemoBoard, createId, exportMarkdown, isBoardMarkdown, parseBoard, safeExternalUrl, serializeBoard } from './model';
 import { BoardRepository } from './repository';
 import type { Attachment, Board, WallHost } from './types';
 import { WallApp } from './wall';
+import { LinkPreviewService } from './link-preview';
 
 const VIEW_TYPE = 'linb-kanban-view';
 const ROOT = 'LinB Kanban';
@@ -10,19 +12,21 @@ const IMAGE_TYPES: Record<string, string> = { png: 'image/png', jpg: 'image/jpeg
 const MAX_FILE = 25 * 1024 * 1024;
 
 function problem(error: unknown): string { return error instanceof Error ? error.message : String(error); }
-function leafName(value: string): string { return value.replace(/[\\/:*?"<>|\u0000-\u001f]/g, '-').replace(/^\.+/, '').trim().slice(0, 90) || '未命名看板'; }
+function leafName(value: string): string { return value.replace(/[\\/:*?"<>|\u0000-\u001f]/g, '-').replace(/^\.+/, '').trim().slice(0, 90) || t("未命名看板"); }
 
 export default class LinBKanbanPlugin extends Plugin {
   repository!: BoardRepository;
+  readonly linkPreviews = new LinkPreviewService(url => requestUrl({ url, throw: false, headers: { Accept: 'text/html' } }));
   private routing = new WeakSet<WorkspaceLeaf>();
   private stopped = false;
   private routingQueued = false;
   private routingTimer: ReturnType<typeof setTimeout> | null = null;
   private routingEpoch = 0;
   async onload(): Promise<void> {
+    setLanguage(getLanguage());
     const find = (path: string): TFile => {
       const file = this.app.vault.getAbstractFileByPath(path);
-      if (!(file instanceof TFile)) throw new Error('看板文件已移动或删除，请重新打开。');
+      if (!(file instanceof TFile)) throw new Error(t("看板文件已移动或删除，请重新打开。"));
       return file;
     };
     this.repository = new BoardRepository({
@@ -32,7 +36,7 @@ export default class LinBKanbanPlugin extends Plugin {
     this.registerView(VIEW_TYPE, leaf => new LinBKanbanView(leaf, this));
     // Keep historical board files visible even when unsupported files are hidden.
     try { this.registerExtensions(['moss'], VIEW_TYPE); }
-    catch { new Notice('旧版文件显示兼容未能启用，仍可通过“LinB Kanban: 打开看板”访问旧看板。'); }
+    catch { new Notice(t("旧版文件显示兼容未能启用，仍可通过“LinB Kanban: 打开看板”访问旧看板。")); }
     this.register(() => { this.stopped = true; if (this.routingTimer !== null) clearTimeout(this.routingTimer); });
     const requestRouting = () => { this.routingEpoch++; this.queueRouting(); };
     this.registerEvent(this.app.workspace.on('file-open', requestRouting));
@@ -42,13 +46,13 @@ export default class LinBKanbanPlugin extends Plugin {
       if (file instanceof TFile && file.extension === 'md') requestRouting();
     }));
     this.app.workspace.onLayoutReady(requestRouting);
-    this.addRibbonIcon('copy-plus', '新建看板', () => this.createBoardDialog());
-    this.addCommand({ id: 'open-board', name: '打开看板', callback: () => this.chooseBoard() });
-    this.addCommand({ id: 'create-board', name: '新建看板', callback: () => this.createBoardDialog() });
-    this.addCommand({ id: 'create-demo-board', name: '创建示例看板', callback: () => { void this.writeDemo().catch(e => new Notice(problem(e))); } });
-    this.addCommand({ id: 'import-legacy-board', name: '导入旧版看板', callback: () => this.importLegacyBoard() });
+    this.addRibbonIcon('copy-plus', t("新建看板"), () => this.createBoardDialog());
+    this.addCommand({ id: 'open-board', name: t("打开看板"), callback: () => this.chooseBoard() });
+    this.addCommand({ id: 'create-board', name: t("新建看板"), callback: () => this.createBoardDialog() });
+    this.addCommand({ id: 'create-demo-board', name: t("创建示例看板"), callback: () => { void this.writeDemo().catch(e => new Notice(problem(e))); } });
+    this.addCommand({ id: 'import-legacy-board', name: t("导入旧版看板"), callback: () => this.importLegacyBoard() });
     this.registerEvent(this.app.workspace.on('file-menu', (menu, file) => {
-      if (file instanceof TFile && (file.extension === 'moss' || this.app.metadataCache.getFileCache(file)?.frontmatter?.['linb-kanban'] === 1)) menu.addItem(item => item.setTitle('用看板打开').setIcon('copy-plus').onClick(() => { void this.openBoard(file); }));
+      if (file instanceof TFile && (file.extension === 'moss' || this.app.metadataCache.getFileCache(file)?.frontmatter?.['linb-kanban'] === 1)) menu.addItem(item => item.setTitle(t("用看板打开")).setIcon('copy-plus').onClick(() => { void this.openBoard(file); }));
     }));
   }
 
@@ -58,7 +62,7 @@ export default class LinBKanbanPlugin extends Plugin {
       current = current ? `${current}/${part}` : part;
       const existing = this.app.vault.getAbstractFileByPath(current);
       if (existing instanceof TFolder) continue;
-      if (existing) throw new Error(`“${current}”是文件，无法在此保存附件。`);
+      if (existing) throw new Error(t("“{0}”是文件，无法在此保存附件。", current));
       try { await this.app.vault.createFolder(current); }
       catch (error) { if (!(this.app.vault.getAbstractFileByPath(current) instanceof TFolder)) throw error; }
     }
@@ -97,10 +101,10 @@ export default class LinBKanbanPlugin extends Plugin {
   private importLegacyBoard(): void {
     // Explicit conversion creates a separate Markdown copy; the original stays intact.
     const files = this.app.vault.getFiles().filter(file => ['moss', 'json'].includes(file.extension));
-    if (!files.length) { new Notice('请先把旧版看板文件放入当前笔记库，再运行此命令。'); return; }
+    if (!files.length) { new Notice(t("请先把旧版看板文件放入当前笔记库，再运行此命令。")); return; }
     new BoardPicker(this.app, files, file => {
       void this.app.vault.read(file).then(text => this.writeNewBoard(parseBoard(text)))
-        .then(() => new Notice('已创建 Markdown 看板，旧文件和附件保持不变。'))
+        .then(() => new Notice(t("已创建 Markdown 看板，旧文件和附件保持不变。")))
         .catch(error => new Notice(problem(error)));
     }).open();
   }
@@ -160,7 +164,7 @@ class LinBKanbanView extends FileView {
     this.registerEvent(this.app.vault.on('modify', file => { if (file instanceof TFile && file === this.file) void this.refresh(file); }));
   }
   getViewType(): string { return VIEW_TYPE; }
-  getDisplayText(): string { return this.file?.basename ?? '看板'; }
+  getDisplayText(): string { return this.file?.basename ?? t("看板"); }
   getIcon(): string { return 'copy-plus'; }
   // An extension alone cannot distinguish board Markdown from an ordinary note.
   // Marked Markdown is opened explicitly by the plugin's content-aware routing.
@@ -178,7 +182,7 @@ class LinBKanbanView extends FileView {
     if (file.extension !== 'moss' && !isBoardMarkdown(text)) {
       // Restored workspace state may still assign an ordinary note to this view.
       // Switching inside onLoadFile is ignored by Obsidian while the leaf is busy.
-      this.contentEl.createEl('p', { text: '正在打开普通笔记…' });
+      this.contentEl.createEl('p', { text: t("正在打开普通笔记…") });
       this.redirectTimer = setTimeout(() => {
         this.redirectTimer = null;
         if (lifecycle !== this.lifecycle || this.file !== file || this.leaf.view !== this) return;
@@ -215,9 +219,9 @@ class LinBKanbanView extends FileView {
       this.errorEl?.remove();
       this.errorEl = this.contentEl.createDiv({ cls: 'linb-load-error' });
       this.errorEl.setAttribute('role', 'alert');
-      this.errorEl.createEl('strong', { text: '看板暂时无法读取' });
-      this.errorEl.createEl('p', { text: `${problem(error)} 原文件未被修改。` });
-      const button = this.errorEl.createEl('button', { text: '重新读取' });
+      this.errorEl.createEl('strong', { text: t("看板暂时无法读取") });
+      this.errorEl.createEl('p', { text: t("{0} 原文件未被修改。", problem(error)) });
+      const button = this.errorEl.createEl('button', { text: t("重新读取") });
       button.onclick = () => { void this.refresh(file); };
       this.contentEl.prepend(this.errorEl);
     }
@@ -225,8 +229,9 @@ class LinBKanbanView extends FileView {
 
   private host(file: TFile): WallHost {
     return {
+      getLinkPreview: url => this.plugin.linkPreviews.get(url),
       save: async operation => {
-        if (this.file !== file) throw new Error('已切换看板，请重新打开后再保存。');
+        if (this.file !== file) throw new Error(t("已切换看板，请重新打开后再保存。"));
         return this.plugin.repository.save(file.path, operation);
       },
       importFiles: files => this.importFiles(files),
@@ -250,16 +255,16 @@ class LinBKanbanView extends FileView {
       openAttachment: attachment => {
         const asset = this.app.vault.getAbstractFileByPath(attachment.path);
         if (asset instanceof TFile) void this.app.workspace.getLeaf('tab').openFile(asset);
-        else new Notice('附件已移动或不存在。');
+        else new Notice(t("附件已移动或不存在。"));
       },
       openLink: value => { const url = safeExternalUrl(value); if (url) window.open(url, '_blank', 'noopener,noreferrer'); },
       exportMarkdown: async () => {
         const current = await this.plugin.repository.read(file.path);
         const folder = file.parent && !file.parent.isRoot() ? file.parent.path : '';
-        const target = this.plugin.uniquePath(`${folder ? `${folder}/` : ''}${leafName(current.title)} - 导出`, 'md');
+        const target = this.plugin.uniquePath(t("{0}{1} - 导出", folder ? `${folder}/` : '', leafName(current.title)), 'md');
         const exported = await this.app.vault.create(target, exportMarkdown(current, folder));
         await this.plugin.openBoard(exported);
-        new Notice('已导出为 Markdown，原看板保持不变。');
+        new Notice(t("已导出为 Markdown，原看板保持不变。"));
       },
       createBoard: () => this.plugin.createBoardDialog(),
       chooseBoard: () => this.plugin.chooseBoard(),
@@ -269,29 +274,29 @@ class LinBKanbanView extends FileView {
   private async chooseVaultImages(): Promise<Attachment[]> {
     const sourceFile = this.file;
     const files = this.app.vault.getFiles().filter(file => IMAGE_TYPES[file.extension.toLowerCase()]).sort((a, b) => b.stat.mtime - a.stat.mtime);
-    if (!files.length) { new Notice('笔记库中还没有图片，可以先添加附件。'); return []; }
+    if (!files.length) { new Notice(t("笔记库中还没有图片，可以先添加附件。")); return []; }
     let picker!: VaultImagePicker;
     const selected = await new Promise<TFile | null>(resolve => {
       picker = new VaultImagePicker(this.app, files, resolve); this.imagePicker = picker; picker.open();
     });
     if (this.imagePicker === picker) this.imagePicker = null;
     if (!selected || this.file !== sourceFile) return [];
-    if (this.app.vault.getAbstractFileByPath(selected.path) !== selected) throw new Error('这张图片已被删除，请重新选择。');
+    if (this.app.vault.getAbstractFileByPath(selected.path) !== selected) throw new Error(t("这张图片已被删除，请重新选择。"));
     return [{ path: selected.path, name: selected.name, mime: IMAGE_TYPES[selected.extension.toLowerCase()] }];
   }
 
   private async importFiles(files: File[]): Promise<Attachment[]> {
-    if (!this.file) throw new Error('请先打开看板。');
-    if (files.length > 20) throw new Error('一次最多添加 20 个附件，请分批添加。');
+    if (!this.file) throw new Error(t("请先打开看板。"));
+    if (files.length > 20) throw new Error(t("一次最多添加 20 个附件，请分批添加。"));
     for (const file of files) {
-      if (file.size > MAX_FILE) throw new Error(`“${file.name}”超过 25 MB，请压缩后再添加。`);
-      if (!file.size) throw new Error(`“${file.name}”是空文件。`);
+      if (file.size > MAX_FILE) throw new Error(t("“{0}”超过 25 MB，请压缩后再添加。", file.name));
+      if (!file.size) throw new Error(t("“{0}”是空文件。", file.name));
     }
     const folder = `${ROOT}/附件/${this.boardId}`;
     await this.plugin.ensureFolder(folder);
     const attachments: Attachment[] = [];
     for (const file of files) {
-      const originalName = file.name || '粘贴的图片.png';
+      const originalName = file.name || t("粘贴的图片.png");
       const extension = /\.([a-zA-Z0-9]{1,12})$/.exec(originalName)?.[1].toLowerCase() ?? '';
       const stem = extension ? originalName.slice(0, -(extension.length + 1)) : originalName;
       const name = `${leafName(stem)}${extension ? `.${extension}` : ''}`;
@@ -304,7 +309,7 @@ class LinBKanbanView extends FileView {
 }
 
 class BoardPicker extends SuggestModal<TFile> {
-  constructor(app: App, private files: TFile[], private select: (file: TFile) => void) { super(app); this.setPlaceholder('搜索看板…'); }
+  constructor(app: App, private files: TFile[], private select: (file: TFile) => void) { super(app); this.setPlaceholder(t("搜索看板…")); }
   getSuggestions(query: string): TFile[] { return this.files.filter(file => file.path.toLocaleLowerCase().includes(query.toLocaleLowerCase())); }
   renderSuggestion(file: TFile, el: HTMLElement): void { el.createDiv({ text: file.basename }); el.createEl('small', { text: file.path }); }
   onChooseSuggestion(file: TFile): void { this.select(file); }
@@ -312,7 +317,7 @@ class BoardPicker extends SuggestModal<TFile> {
 
 class VaultImagePicker extends SuggestModal<TFile> {
   constructor(app: App, private files: TFile[], private finish: (file: TFile | null) => void) {
-    super(app); this.setPlaceholder('搜索库内图片（文件名或路径）');
+    super(app); this.setPlaceholder(t("搜索库内图片（文件名或路径）"));
   }
   getSuggestions(query: string): TFile[] {
     const search = query.trim().toLocaleLowerCase();
@@ -335,14 +340,14 @@ class VaultImagePicker extends SuggestModal<TFile> {
 class CreateBoardModal extends Modal {
   constructor(app: App, private create: (title: string) => Promise<void>) { super(app); }
   onOpen(): void {
-    this.titleEl.setText('新建看板');
-    let title = '我的看板';
+    this.titleEl.setText(t("新建看板"));
+    let title = t("我的看板");
     let busy = false;
     const error = this.contentEl.createDiv({ cls: 'linb-create-error' }); error.setAttribute('role', 'alert');
-    new Setting(this.contentEl).setName('名称').addText(input => { input.setValue(title).onChange(value => { title = value; }); input.inputEl.setAttribute('aria-label', '看板名称'); setTimeout(() => input.inputEl.select(), 0); });
-    new Setting(this.contentEl).addButton(button => button.setButtonText('创建').setCta().onClick(async () => {
+    new Setting(this.contentEl).setName(t("名称")).addText(input => { input.setValue(title).onChange(value => { title = value; }); input.inputEl.setAttribute('aria-label', t("看板名称")); setTimeout(() => input.inputEl.select(), 0); });
+    new Setting(this.contentEl).addButton(button => button.setButtonText(t("创建")).setCta().onClick(async () => {
       if (busy) return;
-      if (!title.trim()) { error.setText('给这面看板起一个名字。'); return; }
+      if (!title.trim()) { error.setText(t("给这面看板起一个名字。")); return; }
       busy = true; button.setDisabled(true); error.empty();
       try { await this.create(title.trim()); this.close(); }
       catch (e) { error.setText(problem(e)); busy = false; button.setDisabled(false); }

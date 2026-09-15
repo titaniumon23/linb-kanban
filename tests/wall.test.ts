@@ -65,7 +65,7 @@ function fixture(t: TestContext, initial: Board = sampleBoard(), renderer?: Wall
     }
   });
   return {
-    root, dom, operations, imports, opened,
+    root, dom, operations, imports, opened, host,
     board: () => parseBoard(stored),
     deferImportResponse() {
       let release!: () => void;
@@ -667,4 +667,44 @@ test('a checkbox rendering mismatch cannot update the wrong Markdown source line
   const checkbox = h.root.querySelector<HTMLInputElement>('.task-list-item-checkbox')!;
   assert.equal(checkbox.disabled, true); checkbox.click(); await settle();
   assert.equal(h.operations.length, 0); assert.equal(h.board().cards[0].body, '普通正文');
+});
+
+
+test('touch toolbar inserts tasks at the caret, continues on Enter and saves Markdown', async t => {
+  const h = fixture(t); button(h.root, '文字卡片').click(); await settle();
+  const panel = dialog(h.root); const body = field<HTMLTextAreaElement>(panel, '内容');
+  fill(body, '拍摄方案'); body.setSelectionRange(body.value.length, body.value.length);
+  button(panel, '待办').click(); assert.equal(body.value, '- [ ] 拍摄方案');
+  body.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
+  assert.equal(body.value, '- [ ] 拍摄方案\n- [ ] ');
+  button(panel, '保存修改').click(); await settle(); assert.equal(h.board().cards[0].body, '- [ ] 拍摄方案\n- [ ] ');
+});
+
+test('English UI preserves Chinese user content and exposes all formatting actions', async t => {
+  const { setLanguage } = await import('../src/i18n'); setLanguage('en'); t.after(() => setLanguage('zh'));
+  const h = fixture(t); button(h.root, '文字卡片').click(); await settle();
+  const panel = dialog(h.root); assert.equal(field<HTMLTextAreaElement>(panel, 'Content').value, '**内容一**');
+  for (const label of ['Task', 'List', 'Numbered', 'Bold', 'Link', 'Cancel', 'Save changes']) assert.ok(button(panel, label));
+  assert.ok(button(h.root, 'Wall')); assert.ok(button(h.root, 'Columns'));
+  assert.equal(panel.querySelector('select.linb-color-select option')?.textContent, 'Default');
+});
+
+test('link preview renders a cover with video marker and safely drops a failed image', async t => {
+  const h = fixture(t); h.host.getLinkPreview = async url => ({ url, title: '视频标题', description: '简介', image: 'https://example.com/cover.jpg', video: true });
+  h.externalChange({ type: 'card:update', id: h.board().cards[0].id, patch: { link: 'https://example.com/video' } }); await settle();
+  const preview = h.root.querySelector('.linb-link-preview')!;
+  assert.ok(preview.querySelector('img')); assert.ok(preview.querySelector('.linb-link-play')); assert.match(preview.textContent!, /视频标题/);
+  preview.querySelector('img')!.dispatchEvent(new Event('error')); assert.equal(preview.querySelector('img'), null); assert.ok(preview.querySelector('.linb-link-play'));
+});
+
+test('editor follows the visible keyboard area and releases viewport listeners on close', async t => {
+  const h = fixture(t); const viewport = new h.dom.window.EventTarget() as EventTarget & { height: number; offsetTop: number };
+  viewport.height = 800; viewport.offsetTop = 0;
+  Object.defineProperty(h.dom.window, 'visualViewport', { value: viewport, configurable: true });
+  const root = h.root.querySelector<HTMLElement>('.linb-kanban')!;
+  root.getBoundingClientRect = () => ({ top: 80, bottom: 800, height: 720 } as DOMRect);
+  button(h.root, '文字卡片').click(); await settle();
+  const overlay = h.root.querySelector<HTMLElement>('.linb-editor-overlay')!; assert.equal(overlay.style.height, '720px');
+  viewport.height = 420; viewport.dispatchEvent(new Event('resize')); assert.equal(overlay.style.height, '340px');
+  button(dialog(h.root), '取消').click(); viewport.height = 500; viewport.dispatchEvent(new Event('resize')); assert.equal(overlay.style.height, '340px');
 });

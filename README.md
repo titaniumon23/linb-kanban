@@ -2,9 +2,13 @@
 
 Organize Markdown, images and files in **columns** or a **masonry wall**, using your current Obsidian theme.
 
-The interface is in Chinese. It follows the pane width on desktop, tablet and phone, including split panes. Boards are local files; no account, subscription or external service is required.
+The interface follows Obsidian's language: Chinese for Chinese locales, English otherwise. It follows the pane width on desktop, tablet and phone, including split panes. Boards are local files; no account, subscription or external service is required.
 
 ## Features
+
+- Use the toolbar below Content to insert tasks, bullet/numbered lists, bold text and links at the caret, or format selected text. Enter continues list items; Enter on an empty item exits the list. Existing right-click task conversion remains available.
+- Preview the card's link, or the first web link in its body, with the page's title and cover when available. Recognized video URLs or video metadata add a play badge at the bottom right; clicking opens the original link, without autoplay.
+- Mobile editors use compact corners and touch targets. The editor follows its pane and visible keyboard area; narrow panes use the full width. Opening the editor on touch devices does not automatically raise the keyboard.
 
 - Switch between columns and a wall using the same cards.
 - Write Markdown and view it with Obsidian's native renderer after saving.
@@ -55,11 +59,17 @@ Card body text has one authoritative copy in the Markdown document. You can edit
 
 Back up or sync the board files and attachments together. The plugin does not provide its own sync service. Keep referenced attachment paths stable; external file renames are not yet reconciled with the hidden attachment metadata.
 
-There is no telemetry, advertising, payment requirement or background network service. Files outside the vault are read only when you explicitly select, paste or drop them as attachments. Opening external links, or rendering Markdown containing remote images or embeds, can contact the services specified by that content through Obsidian or your browser.
+There is no telemetry, advertising, payment requirement or external preview proxy. For visible link cards, the plugin directly requests the linked webpage's metadata using Obsidian's HTTP API, then loads its cover image from the declared image URL. Requests are deduplicated in memory, limited to three concurrent metadata requests and time out to a plain-link fallback. This sends the URL to that website and image requests to its image host; it does not send card text or vault files. [Open Graph](https://ogp.me/) metadata is read as strings, never executed or embedded as a remote page.
+
+Preview availability depends on each site: private/login-only pages, blocked requests, missing metadata, expired image URLs and offline use may show a plain link or a video badge without a cover. Direct video files show a video badge; no frames are downloaded to generate thumbnails. The link field takes priority over body links, with one preview per card. Preview metadata is not stored in the board file, so existing Markdown and legacy formats remain unchanged. Files outside the vault are read only when you explicitly select, paste or drop them as attachments. Opening external links, or rendering Markdown containing remote images or embeds, can contact the services specified by that content through Obsidian or your browser.
 
 Removing a card or attachment reference, cancelling an edit, or uninstalling the plugin does not delete attachment files. Real-time collaboration is not included.
 
 ## 中文说明
+
+**0.4.0：**界面跟随 Obsidian 自动使用中文或英文，你写的内容不会翻译。内容框下增加待办、列表、编号、加粗、链接工具栏，光标所在行即可操作；回车继续列表，空白项回车退出。移动端收紧输入框圆角、扩大触控区域，编辑面板随窗口和键盘可见区域调整。
+
+卡片链接（没有时使用正文第一条网页链接）会尝试显示网站提供的封面、标题和摘要；能识别的视频链接右下角有播放标记，点击打开原网站，不自动播放。受登录或网站限制、没有封面、离线时保留可打开的链接。预览直接请求对应网站及封面地址，不通过第三方预览服务。
 
 LinB Kanban 沿用 Obsidian 的主题颜色和字体，主要提供「栏」和「墙」两种视图。卡片可以写 Markdown、添加图片和其他文件。在编辑框的「卡片颜色」中选择默认、石墨灰、淡紫、雾蓝、柔绿、浅橙或淡粉，保存后生效。颜色使用当前主题的色值与背景混合，随深浅主题调整。
 

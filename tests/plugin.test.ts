@@ -84,7 +84,7 @@ class MemoryVault extends Events {
   }
 }
 
-async function fixture(t: TestContext) {
+async function fixture(t: TestContext, locale = 'zh') {
   const dom = new JSDOM('<!doctype html><html><body></body></html>', { url: 'https://linb.test/' });
   const globals = ['window', 'document', 'Element', 'HTMLElement', 'HTMLDivElement', 'Node', 'File', 'Event', 'KeyboardEvent'] as const;
   const descriptors = new Map(globals.map(name => [name, Object.getOwnPropertyDescriptor(globalThis, name)]));
@@ -104,6 +104,7 @@ async function fixture(t: TestContext) {
   });
   const vault = new MemoryVault();
   const notices: string[] = [];
+  const previewRequests: string[] = [];
   const opened: string[] = [];
   const views: any[] = [];
   const markdownLeaves: any[] = [];
@@ -151,7 +152,8 @@ async function fixture(t: TestContext) {
     setPlaceholder(_value: string) {}
   }
   const mockObsidian = {
-    Plugin, Component, FileView, Modal, SuggestModal: Modal, Setting: class {}, TFile: VaultFile, TFolder: Folder,
+    requestUrl: async (request: { url: string }) => { previewRequests.push(request.url); return { status: 200, headers: { 'content-type': 'text/html' }, text: '<meta property="og:title" content="Native preview"><meta property="og:image" content="https://example.com/cover.jpg"><meta property="og:type" content="video.other">' }; },
+    getLanguage: () => locale, Plugin, Component, FileView, Modal, SuggestModal: Modal, Setting: class {}, TFile: VaultFile, TFolder: Folder,
     Notice: class { constructor(text: string) { notices.push(text); } },
     normalizePath: (path: string) => path.replace(/\\/g, '/').replace(/\/+/g, '/').replace(/\/$/, ''),
     MarkdownRenderer: { async render(_app: unknown, text: string, container: HTMLElement) { container.textContent = text; } },
@@ -170,7 +172,7 @@ async function fixture(t: TestContext) {
     }
   });
   return {
-    vault, notices, opened, factories, extensions, commands, ribbons, modals, workspace, plugin, views, viewStates,
+    vault, notices, previewRequests, opened, factories, extensions, commands, ribbons, modals, workspace, plugin, views, viewStates,
     ready: () => layoutReady(),
     note(file: VaultFile) {
       let state = { type: 'markdown', state: { file: file.path } };
@@ -649,4 +651,23 @@ test('routing waits until the host finishes the file-open lifecycle before switc
   await settle();
   assert.equal(leaf.getViewState().type, 'linb-kanban-view');
   assert.deepEqual(h.vault.writes, []);
+});
+
+
+test('native commands, ribbon and board controls follow the Obsidian language', async t => {
+  const h = await fixture(t, 'en');
+  assert.equal(h.ribbons[0].title, 'New board'); assert.equal(h.commands[0].name, 'Open board');
+  const file = h.vault.seed('中文名称.md', serializeBoard(createBoard('中文名称')));
+  const view = await h.load(file); assert.match(view.contentEl.textContent, /中文名称/);
+  assert.ok(button(view.contentEl.querySelector('.linb-toolbar')!, 'Add card'));
+});
+
+
+test('native link previews use the Obsidian HTTP API without modifying board files', async t => {
+  const h = await fixture(t); const board = createBoard();
+  board.cards.push(createCard(board.columns[0].id, { link: 'https://example.com/watch' }));
+  const file = h.vault.seed('preview.md', serializeBoard(board)); const view = await h.load(file);
+  assert.deepEqual(h.previewRequests, ['https://example.com/watch']);
+  assert.match(view.contentEl.querySelector('.linb-link-preview').textContent, /Native preview/);
+  assert.ok(view.contentEl.querySelector('.linb-link-play')); assert.deepEqual(h.vault.writes, []);
 });

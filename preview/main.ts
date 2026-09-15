@@ -1,3 +1,5 @@
+import { setLanguage } from '../src/i18n';
+import { LinkPreviewService } from '../src/link-preview';
 import { applyOperation, createBoard, createDemoBoard, createId, exportMarkdown, parseBoard, safeExternalUrl, serializeBoard } from '../src/model';
 import type { Attachment, Board, WallHost } from '../src/types';
 import { WallApp } from '../src/wall';
@@ -52,7 +54,9 @@ function download(contents: string, name: string, type: string): void {
 function persist(next: Board): void { localStorage.setItem(KEY, serializeBoard(next)); board = next; }
 
 
+const previews = new LinkPreviewService(async url => { const response = await fetch(url, { credentials: 'omit', referrerPolicy: 'no-referrer' }); return { status: response.status, headers: { 'content-type': response.headers.get('content-type') || '' }, text: await response.text() }; });
 const host: WallHost = {
+  getLinkPreview: url => previews.get(url),
   save: async operation => { const latest = localStorage.getItem(KEY); const next = applyOperation(latest ? parseBoard(latest) : board, operation); persist(next); return board; },
   importFiles: async files => {
     const result: Attachment[] = [];
@@ -82,6 +86,7 @@ const host: WallHost = {
 };
 
 async function start(): Promise<void> {
+  setLanguage(document.documentElement.lang || navigator.language);
   try {
     const saved = localStorage.getItem(KEY) ?? localStorage.getItem(LEGACY_KEY);
     if (saved) { board = parseBoard(saved); persist(board); }
@@ -101,3 +106,6 @@ const strip = document.querySelector<HTMLElement>('.preview-strip')!;
 new ResizeObserver(() => document.documentElement.style.setProperty('--preview-bar-height', `${strip.getBoundingClientRect().height}px`)).observe(strip);
 document.querySelector<HTMLButtonElement>('#reset')!.onclick = () => { if (window.confirm('重置会清除本浏览器中的预览卡片。要先通过墙内菜单导出再重置吗？选择“确定”直接重置。')) { localStorage.removeItem(KEY); localStorage.removeItem(LEGACY_KEY); location.reload(); } };
 void start();
+
+document.querySelector<HTMLSelectElement>('#language')!.onchange = event => { setLanguage((event.target as HTMLSelectElement).value); wall.destroy(); wall = new WallApp(appEl, board, host); };
+document.querySelector<HTMLInputElement>('#mobile-style')!.onchange = event => { document.body.classList.toggle('is-mobile', (event.target as HTMLInputElement).checked); };

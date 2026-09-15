@@ -72,7 +72,7 @@
 .linb-kanban .linb-toolbar-actions { display: flex; align-items: center; gap: 6px; flex: 0 0 auto; min-width: 0; }
 .linb-kanban .linb-icon-button { display: inline-flex; align-items: center; justify-content: center; flex: 0 0 30px; width: 30px; height: 30px; color: var(--text-muted); }
 .linb-kanban .linb-icon-button:hover { color: var(--text-normal); background: var(--background-modifier-hover); }
-.linb-kanban .linb-button { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 32px; padding: 6px 12px; border: 1px solid var(--background-modifier-border); border-radius: var(--button-radius, var(--radius-s, 4px)); background: var(--interactive-normal); color: var(--text-normal); white-space: nowrap; }
+.linb-kanban .linb-button { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 32px; padding: 6px 12px; border: 1px solid var(--background-modifier-border); border-radius: min(var(--button-radius, var(--radius-s, 4px)), 8px); background: var(--interactive-normal); color: var(--text-normal); white-space: nowrap; }
 .linb-kanban .linb-button:hover { background: var(--interactive-hover); }
 .linb-kanban .linb-primary { border-color: transparent; background: var(--interactive-accent); color: var(--text-on-accent); }
 .linb-kanban .linb-primary:hover { background: var(--interactive-accent-hover); color: var(--text-on-accent); }
@@ -142,7 +142,7 @@
 .linb-kanban .linb-add-column:hover { background: var(--background-modifier-hover); color: var(--text-normal); }
 .linb-kanban .is-dragging { opacity: .45; }
 .linb-kanban .is-drop-target { outline: 2px dashed var(--interactive-accent); outline-offset: -2px; }
-.linb-kanban.linb-file-over::after { content: '松开，添加图片或文件'; position: absolute; inset: 8px; z-index: 60; display: grid; place-items: center; border: 2px dashed var(--interactive-accent); border-radius: var(--radius-m, 8px); background: var(--background-primary); color: var(--text-accent); pointer-events: none; }
+.linb-kanban.linb-file-over::after { content: attr(data-drop-label); position: absolute; inset: 8px; z-index: 60; display: grid; place-items: center; border: 2px dashed var(--interactive-accent); border-radius: var(--radius-m, 8px); background: var(--background-primary); color: var(--text-accent); pointer-events: none; }
 .linb-kanban .linb-empty { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; min-height: min(280px, 100%); padding: 32px 16px; text-align: center; }
 .linb-kanban .linb-empty p { max-width: 300px; color: var(--text-muted); }
 .linb-kanban .linb-empty small { color: var(--text-muted); font-size: var(--font-ui-smaller, 12px); }
@@ -224,7 +224,7 @@
   .linb-kanban .linb-toolbar-actions > .linb-button { padding-inline: 8px; }
   .linb-kanban .linb-mode { gap: 4px; padding-inline: 6px; }
 }
-@media (pointer: coarse) {
+@media (any-pointer: coarse) {
   .linb-kanban :is(.linb-button, .linb-mode, .linb-title-button, .linb-column-title, .linb-column-add, .linb-add-column, .linb-upload-button, .linb-attachment-link, .linb-link-pill, .linb-menu-item, .linb-toast-action) { min-height: 44px; }
   .linb-kanban .linb-icon-button,
   .linb-kanban .linb-card-grip { flex-basis: 44px; width: 44px; min-width: 44px; height: 44px; min-height: 44px; }
@@ -296,3 +296,49 @@
 .linb-vault-image-option > div { min-width: 0; }
 .linb-vault-image-option :is(small, div > div) { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .linb-vault-image-option small { color: var(--text-muted); font-size: var(--font-ui-smaller, 12px); }
+
+/* Compact native form corners, including iOS themes with pill-shaped inputs. */
+.linb-kanban .linb-editor :is(input.linb-input, textarea.linb-input, select.linb-input) {
+  border-radius: min(var(--radius-m, 8px), 8px);
+  -webkit-appearance: none;
+  appearance: none;
+  scroll-margin-block: 12px;
+}
+.linb-kanban .linb-editor select.linb-input { appearance: auto; -webkit-appearance: menulist; }
+.linb-kanban .linb-editor .linb-input:focus-visible { outline: 1px solid var(--interactive-accent); outline-offset: 0; }
+.linb-kanban .linb-text-tools { display: flex; flex-wrap: wrap; gap: 2px; margin-top: 6px; }
+.linb-kanban .linb-text-tool { display: inline-flex; align-items: center; justify-content: center; gap: 5px; min-height: 36px; padding: 6px 8px; color: var(--text-muted); font-size: var(--font-ui-smaller, 12px); }
+.linb-kanban .linb-text-tool:hover { background: var(--background-modifier-hover); color: var(--text-normal); }
+.linb-kanban .linb-text-tool:active { color: var(--text-accent); }
+.linb-kanban .linb-link-preview { display: block; width: 100%; overflow: hidden; margin-top: 10px; border: 1px solid var(--background-modifier-border); border-radius: var(--radius-s, 4px); text-align: left; }
+.linb-kanban .linb-link-preview:hover { border-color: var(--background-modifier-border-hover); }
+.linb-kanban .linb-link-media { position: relative; min-height: 88px; aspect-ratio: 16 / 9; overflow: hidden; background: var(--background-secondary); }
+.linb-kanban .linb-link-media img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.linb-kanban .linb-link-play { position: absolute; right: 8px; bottom: 8px; display: grid; place-items: center; width: 32px; height: 32px; border-radius: var(--radius-s, 4px); background: var(--background-primary); color: var(--text-normal); }
+.linb-kanban .linb-link-text { display: flex; flex-direction: column; gap: 5px; padding: 10px; min-width: 0; overflow-wrap: anywhere; }
+.linb-kanban .linb-link-description { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; color: var(--text-muted); font-size: var(--font-ui-smaller, 12px); }
+.linb-kanban .linb-link-site { display: flex; align-items: center; justify-content: space-between; gap: 8px; color: var(--text-muted); font-size: var(--font-ui-smaller, 12px); }
+.linb-kanban .linb-editor-overlay { bottom: auto; height: 100%; }
+@media (any-pointer: coarse) {
+  .linb-kanban .linb-editor { width: min(560px, 100%); }
+  .linb-kanban .linb-text-tool { min-width: 44px; min-height: 44px; }
+  .linb-kanban .linb-editor .linb-input { font-size: max(16px, 1em); }
+  .linb-kanban .linb-body-input { resize: none; min-height: 144px; }
+  .linb-kanban .linb-editor-content { padding-inline: max(16px, env(safe-area-inset-left)); }
+}
+@container linb (max-width: 900px) {
+  .linb-kanban .linb-editor { width: 100%; border-left: 0; }
+}
+
+/* iPad with a connected pointer still needs touch-sized controls. */
+.is-mobile .linb-kanban :is(.linb-button, .linb-mode, .linb-title-button, .linb-column-title, .linb-column-add, .linb-add-column, .linb-upload-button, .linb-attachment-link, .linb-menu-item, .linb-text-tool) { min-height: 44px; }
+.is-mobile .linb-kanban :is(.linb-icon-button, .linb-card-grip) { flex-basis: 44px; width: 44px; min-width: 44px; height: 44px; min-height: 44px; }
+.is-mobile .linb-kanban .linb-editor .linb-input { min-height: 44px; font-size: max(16px, 1em); }
+.is-mobile .linb-kanban .linb-body-input { resize: none; }
+.is-mobile .linb-kanban .linb-editor { width: min(560px, 100%); }
+@container linb (max-width: 900px) {
+  .is-mobile .linb-kanban .linb-editor { width: 100%; }
+}
+
+.is-mobile .linb-kanban .linb-card-title { min-height: 44px; padding-block: 10px; }
+.is-mobile .linb-kanban .linb-card-head { align-items: center; gap: 2px; }

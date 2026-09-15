@@ -1,8 +1,12 @@
-# LinB Kanban 0.3.4 validation
+# LinB Kanban 0.4.0 validation
 
-Date: 2026-09-14.
+Date: 2026-09-15.
 
 ## Automated checks
+
+- Added coverage for caret-based formatting, list continuation, native HTTP previews, safe metadata parsing, request deduplication/concurrency, offline fallback, image errors, and keyboard-area resizing with listener cleanup.
+- Chinese/English UI tests cover native commands and rendered editors. A Chinese board with an untitled card and a link parses and serializes byte-identically after switching to English; existing user content is preserved.
+- Browser inspection covered desktop, 768 px tablet, 390 px phone, and 320 px narrow layouts, including light/dark and English. The mobile input radius measured 8 px despite simulated 50 px native radius tokens, with no horizontal editor overflow. Formatting buttons measured 44 px in mobile mode. Browser interaction verified task insertion, Enter continuation, and native undo of formatting.
 
 - Reproduced the ordinary-note blank pane with a host fixture that ignores nested view transitions during file loading, matching the installed Obsidian implementation. The board view no longer accepts arbitrary `.md` files by extension. Stale board-state recovery and automatic routing defer transitions until after the file-load event turn; recovery is cancelled on file change, close or unload. Four assertions failed before the fix, and all pass afterward. These checks do not write note contents.
 
@@ -12,7 +16,7 @@ Date: 2026-09-14.
 
 - Fixed the upgrade regression where unsupported historical file types disappeared from the explorer and normal board picker. Historical extensions are registered again; opening is read-only and explicit edits preserve JSON format. Export creates a separate Markdown copy.
 
-- TypeScript checking and all 75 automated tests passed.
+- TypeScript checking and all 91 automated tests passed.
 - Markdown round trips preserve columns/wall layout, global and per-column order, all card colors, empty columns, text, checked tasks, attachments and unknown metadata.
 - Body text is stored once. Source body edits are parsed; stale editors cannot overwrite or delete an externally edited body. Damaged markers and unsupported structural edits are refused without writes.
 - Compiled-plugin host tests cover automatic routing of received Markdown and restored tabs, ordinary-note isolation, file-switch races, unload behavior, creation/export paths, and non-destructive legacy import.
@@ -22,7 +26,7 @@ Date: 2026-09-14.
 
 ## Limits
 
-Tests use a simulated Obsidian host and DOM/pointer geometry. Full Obsidian visual acceptance and physical iOS/Android device tests have not been completed. Third-party themes and desktop pop-out windows have not been exhaustively tested.
+Tests use a simulated Obsidian host and DOM/pointer geometry. Physical iPad/iPhone keyboard and touch validation, full native Obsidian acceptance, and Android device tests have not been completed. Browser pane and mobile-style simulations do not replace those checks. Live previews are not guaranteed for all platforms or login-only pages. Third-party themes and desktop pop-out windows have not been exhaustively tested.
 
 Sharing a Markdown board does not embed image or attachment bytes. Referenced files must accompany it at the same vault-relative paths. External attachment renames are not automatically reconciled with hidden metadata. Source editing outside card-body blocks is not supported; these edits are detected and protected from silent replacement.
 

@@ -23,6 +23,7 @@ export type BoardOperation =
   | { type: 'column:delete'; id: string; moveToId: string };
 
 export interface WallHost {
+  getLinkPreview?(url: string): Promise<import('./link-preview').LinkPreview>;
   save(operation: BoardOperation): Promise<Board>;
   importFiles(files: File[]): Promise<Attachment[]>;
   chooseVaultImages?(): Promise<Attachment[]>;

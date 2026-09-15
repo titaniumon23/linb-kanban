@@ -1,8 +1,11 @@
+import { t } from './i18n';
 import type { Board, BoardOperation, CardColor, CardPatch, WallCard, WallHost } from './types';
 import { createId, createCard, safeExternalUrl } from './model';
-import { taskifySelection, taskMarkers } from './markdown';
+import { taskifySelection, taskMarkers, formatText, continueList, type TextEdit, type MarkdownTool } from './markdown';
+import { cardPreviewUrl, fallbackPreview, previewUrl, type LinkPreview } from './link-preview';
 
 const PATHS: Record<string, string> = {
+  play: 'm9 5 11 7-11 7Z', task: 'M9 6h12M9 12h12M9 18h12M3 6h.01M3 12h.01M3 18h.01', bold: 'M6 3h7a5 5 0 0 1 0 10H6V3Zm0 10h8a4 4 0 0 1 0 8H6v-8Z',
   plus: 'M12 5v14M5 12h14', close: 'M6 6l12 12M18 6 6 18', search: 'm21 21-5-5M18 10a8 8 0 1 1-16 0 8 8 0 0 1 16 0',
   wall: 'M3 3h7v8H3zM14 3h7v5h-7zM3 15h7v6H3zM14 12h7v9h-7z', columns: 'M3 4h5v16H3zM10 4h4v16h-4zM16 4h5v16h-5z',
   more: 'M5 12h.01M12 12h.01M19 12h.01', edit: 'm16 3 5 5-12 12-6 1 1-6ZM13 6l5 5',
@@ -14,7 +17,7 @@ const PATHS: Record<string, string> = {
   folder: 'M3 6h7l2 3h9v11H3zM3 6V4h7l2 2', up: 'm6 14 6-6 6 6', grip: 'M8 5h.01M16 5h.01M8 12h.01M16 12h.01M8 19h.01M16 19h.01',
   file: 'M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8ZM14 2v6h6',
 };
-const CARD_COLORS: [CardColor, string][] = [['white', '默认'], ['gray', '石墨灰'], ['lavender', '淡紫'], ['sky', '雾蓝'], ['sage', '柔绿'], ['sand', '浅橙'], ['rose', '淡粉']];
+const CARD_COLORS = (): [CardColor, string][] => [['white', t("默认")], ['gray', t("石墨灰")], ['lavender', t("淡紫")], ['sky', t("雾蓝")], ['sage', t("柔绿")], ['sand', t("浅橙")], ['rose', t("淡粉")]];
 let sequence = 0;
 function id(prefix = 'linb'): string { return `${prefix}-${++sequence}-${createId()}`; }
 function el<K extends keyof HTMLElementTagNameMap>(tag: K, cls = '', text = ''): HTMLElementTagNameMap[K] {
@@ -38,6 +41,7 @@ function cardDraft(card?: WallCard, columnId = ''): CardPatch {
 interface SheetState {
   overlay: HTMLElement; panel: HTMLElement; close: () => void; dirty: () => boolean; busy: boolean; guard: HTMLElement;
   onFiles?: (files: File[]) => Promise<void>;
+  cleanup: () => void;
 }
 
 /** A dependency-free interface shared by the Obsidian view and local preview. */
@@ -46,12 +50,13 @@ export class WallApp {
   private readonly host: WallHost;
   private readonly root: HTMLElement;
   private readonly heading = el('span', 'linb-title');
-  private readonly saved = el('span', 'linb-save-status', '已保存');
+  private readonly saved = el('span', 'linb-save-status', t("已保存"));
   private readonly content = el('main', 'linb-content');
   private readonly wallButton: HTMLButtonElement;
   private readonly columnsButton: HTMLButtonElement;
   private readonly toast = el('div', 'linb-toast');
   private renderVersion = 0;
+  private previewObservers = new Set<IntersectionObserver>();
   private pending = 0;
   private sheet: SheetState | null = null;
   private menu: HTMLElement | null = null;
@@ -66,15 +71,15 @@ export class WallApp {
 
   constructor(container: HTMLElement, board: Board, host: WallHost) {
     this.board = clone(board); this.host = host;
-    this.root = el('div', 'linb-kanban');
-    const titleButton = button('重命名', undefined, 'linb-title-button', () => this.openSettings()); titleButton.replaceChildren(this.heading);
-    const toolbar = el('div', 'linb-toolbar'); const modes = el('div', 'linb-modes'); modes.setAttribute('role', 'group'); modes.setAttribute('aria-label', '布局方式');
-    this.wallButton = button('墙', 'wall', 'linb-mode', () => this.changeLayout('wall'));
-    this.columnsButton = button('栏', 'columns', 'linb-mode', () => this.changeLayout('columns')); modes.append(this.columnsButton, this.wallButton);
-    const more = button('更多操作', 'more', 'linb-icon-button linb-board-more', () => this.openBoardMenu(more)); more.setAttribute('aria-haspopup', 'menu');
-    const tools = el('div', 'linb-toolbar-actions'); tools.append(button('添加卡片', 'plus', 'linb-button linb-primary', () => this.openEditor()), more);
+    this.root = el('div', 'linb-kanban'); this.root.dataset.dropLabel = t('松开，添加图片或文件');
+    const titleButton = button(t("重命名"), undefined, 'linb-title-button', () => this.openSettings()); titleButton.replaceChildren(this.heading);
+    const toolbar = el('div', 'linb-toolbar'); const modes = el('div', 'linb-modes'); modes.setAttribute('role', 'group'); modes.setAttribute('aria-label', t("布局方式"));
+    this.wallButton = button(t("墙"), 'wall', 'linb-mode', () => this.changeLayout('wall'));
+    this.columnsButton = button(t("栏"), 'columns', 'linb-mode', () => this.changeLayout('columns')); modes.append(this.columnsButton, this.wallButton);
+    const more = button(t("更多操作"), 'more', 'linb-icon-button linb-board-more', () => this.openBoardMenu(more)); more.setAttribute('aria-haspopup', 'menu');
+    const tools = el('div', 'linb-toolbar-actions'); tools.append(button(t("添加卡片"), 'plus', 'linb-button linb-primary', () => this.openEditor()), more);
     toolbar.append(titleButton, modes, tools);
-    this.content.setAttribute('aria-label', '卡片');
+    this.content.setAttribute('aria-label', t("卡片"));
     const body = el('div', 'linb-body'); body.append(toolbar, this.content);
     this.saved.dataset.state = 'saved'; this.saved.setAttribute('role', 'status'); this.saved.setAttribute('aria-live', 'polite');
     this.toast.setAttribute('role', 'status'); this.toast.setAttribute('aria-live', 'polite'); this.toast.hidden = true;
@@ -96,34 +101,36 @@ export class WallApp {
   }
 
   destroy(): void {
-    this.destroyed = true; this.renderVersion++; clearTimeout(this.toastTimer);
+    this.destroyed = true; this.renderVersion++;
+    for (const observer of this.previewObservers) observer.disconnect(); this.previewObservers.clear(); clearTimeout(this.toastTimer);
     this.cancelPointerDrag();
-    document.removeEventListener('pointerdown', this.onOutsidePointer); this.root.remove(); this.sheet = null;
+    document.removeEventListener('pointerdown', this.onOutsidePointer); this.sheet?.cleanup(); this.root.remove(); this.sheet = null;
   }
 
   private updateHeader(): void {
-    this.heading.textContent = this.board.title || '未命名看板';
+    this.heading.textContent = this.board.title || t("未命名看板");
     this.heading.parentElement?.setAttribute('title', this.board.description || this.heading.textContent);
     this.wallButton.setAttribute('aria-pressed', String(this.board.layout === 'wall')); this.columnsButton.setAttribute('aria-pressed', String(this.board.layout === 'columns'));
   }
   private async operate(operation: BoardOperation): Promise<Board> {
-    this.pending++; this.saved.textContent = '正在保存…'; this.saved.dataset.state = 'saving';
+    this.pending++; this.saved.textContent = t("正在保存…"); this.saved.dataset.state = 'saving';
     try {
       const board = await this.host.save(operation);
       if (!this.destroyed && board.id === this.board.id && board.revision >= this.board.revision) { this.board = clone(board); this.updateHeader(); this.renderContent(); }
       return board;
-    } catch (error) { this.saved.textContent = '保存失败'; this.saved.dataset.state = 'error'; throw error; }
-    finally { this.pending--; if (!this.destroyed && this.pending === 0 && this.saved.dataset.state !== 'error') { this.saved.textContent = '已保存'; this.saved.dataset.state = 'saved'; } }
+    } catch (error) { this.saved.textContent = t("保存失败"); this.saved.dataset.state = 'error'; throw error; }
+    finally { this.pending--; if (!this.destroyed && this.pending === 0 && this.saved.dataset.state !== 'error') { this.saved.textContent = t("已保存"); this.saved.dataset.state = 'saved'; } }
   }
   private async simpleOperation(operation: BoardOperation): Promise<void> {
     try { await this.operate(operation); } catch (error) { this.showToast(this.errorMessage(error)); }
   }
-  private errorMessage(error: unknown): string { return error instanceof Error ? error.message : '暂时没有保存成功，请重试。'; }
+  private errorMessage(error: unknown): string { return error instanceof Error ? error.message : t("暂时没有保存成功，请重试。"); }
   private changeLayout(layout: 'wall' | 'columns'): void { if (layout !== this.board.layout) void this.simpleOperation({ type: 'board:update', patch: { layout } }); }
-  private async exportBoard(): Promise<void> { try { await this.host.exportMarkdown(); this.showToast('Markdown 已导出'); } catch (error) { this.showToast(this.errorMessage(error)); } }
+  private async exportBoard(): Promise<void> { try { await this.host.exportMarkdown(); this.showToast(t("Markdown 已导出")); } catch (error) { this.showToast(this.errorMessage(error)); } }
 
   private renderContent(): void {
     const version = ++this.renderVersion; this.closeMenu(true);
+    for (const observer of this.previewObservers) observer.disconnect(); this.previewObservers.clear();
     const focused = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     const focusedCardId = focused?.closest<HTMLElement>('.linb-card')?.dataset.cardId;
     const focusClass = focused?.className;
@@ -140,7 +147,7 @@ export class WallApp {
     const cards = this.board.cards;
     if (!this.board.cards.length && this.board.layout === 'wall') {
       const empty = el('div', 'linb-empty');
-      empty.append(el('p', '', '还没有卡片'), el('small', '', '添加卡片，或拖入图片和文件。')); this.content.append(empty); restoreFocus(); return;
+      empty.append(el('p', '', t("还没有卡片")), el('small', '', t("添加卡片，或拖入图片和文件。"))); this.content.append(empty); restoreFocus(); return;
     }
     if (this.board.layout === 'wall') {
       const wall = el('div', 'linb-grid'); wall.dataset.layout = 'wall'; cards.forEach(card => wall.append(this.renderCard(card, version)));
@@ -152,17 +159,17 @@ export class WallApp {
       this.board.columns.forEach(column => {
         const section = el('section', 'linb-column'); section.dataset.columnId = column.id;
         const header = el('div', 'linb-column-header'); const matching = cards.filter(card => card.columnId === column.id);
-        const title = button(column.title, undefined, 'linb-column-title', () => this.openColumnEditor(column.id)); title.setAttribute('aria-label', `编辑栏：${column.title}`);
+        const title = button(column.title, undefined, 'linb-column-title', () => this.openColumnEditor(column.id)); title.setAttribute('aria-label', t("编辑栏：{0}", column.title));
         header.append(title, el('span', 'linb-column-count', String(matching.length)));
         const list = el('div', 'linb-column-list'); matching.forEach(card => list.append(this.renderCard(card, version)));
-        const add = button('添加卡片', 'plus', 'linb-column-add', () => this.openEditor(undefined, column.id)); add.setAttribute('aria-label', `向${column.title}添加卡片`);
+        const add = button(t("添加卡片"), 'plus', 'linb-column-add', () => this.openEditor(undefined, column.id)); add.setAttribute('aria-label', t("向{0}添加卡片", column.title));
         section.append(header, list, add);
         section.addEventListener('dragover', event => { if (this.draggedId || this.hasFiles(event)) { event.preventDefault(); section.classList.add('is-drop-target'); } });
         section.addEventListener('dragleave', event => { if (!section.contains(event.relatedTarget as Node)) section.classList.remove('is-drop-target'); });
         section.addEventListener('drop', event => { section.classList.remove('is-drop-target'); if (!this.draggedId || this.hasFiles(event)) return; event.preventDefault(); event.stopPropagation(); this.commitDrop(this.draggedId, section, event.clientX, event.clientY); this.clearDragState(); });
         columns.append(section);
       });
-      columns.append(button('添加栏', 'plus', 'linb-add-column', () => this.openColumnEditor())); this.content.append(columns);
+      columns.append(button(t("添加栏"), 'plus', 'linb-add-column', () => this.openColumnEditor())); this.content.append(columns);
     }
     this.content.scrollTop = contentScrollTop;
     const columns = this.content.querySelector<HTMLElement>('.linb-columns');
@@ -178,15 +185,15 @@ export class WallApp {
     const article = el('article', 'linb-card'); article.dataset.cardId = card.id; article.dataset.cardColor = card.color;
     const imageAttachment = card.attachments.find(attachment => attachment.mime.startsWith('image/'));
     if (imageAttachment) {
-      const cover = button(`打开图片：${imageAttachment.name}`, undefined, 'linb-card-cover', () => this.host.openAttachment(imageAttachment)); cover.replaceChildren();
+      const cover = button(t("打开图片：{0}", imageAttachment.name), undefined, 'linb-card-cover', () => this.host.openAttachment(imageAttachment)); cover.replaceChildren();
       const img = el('img'); img.src = this.host.resolveAsset(imageAttachment.path); img.alt = imageAttachment.name; img.loading = 'lazy'; img.draggable = false;
-      img.addEventListener('error', () => { cover.replaceChildren(icon('image'), el('span', '', '图片暂时无法显示')); cover.classList.add('linb-image-error'); }); cover.append(img); article.append(cover);
+      img.addEventListener('error', () => { cover.replaceChildren(icon('image'), el('span', '', t("图片暂时无法显示"))); cover.classList.add('linb-image-error'); }); cover.append(img); article.append(cover);
     }
     const inner = el('div', 'linb-card-inner'); const head = el('div', 'linb-card-head');
-    const title = button(card.title || '未命名卡片', undefined, 'linb-card-title', () => this.openEditor(card));
-    const more = button(`卡片操作：${card.title || '未命名卡片'}`, 'more', 'linb-icon-button linb-card-more', () => this.openCardMenu(card, more)); more.setAttribute('aria-haspopup', 'menu');
-    const grip = button(`移动卡片：${card.title || '未命名卡片'}`, 'grip', 'linb-icon-button linb-card-grip', () => this.openCardMenu(card, grip)); grip.draggable = false;
-    grip.setAttribute('aria-haspopup', 'menu'); grip.title = '拖动排序，或点按选择移动位置';
+    const title = button(card.title || t("未命名卡片"), undefined, 'linb-card-title', () => this.openEditor(card));
+    const more = button(t("卡片操作：{0}", card.title || t('未命名卡片')), 'more', 'linb-icon-button linb-card-more', () => this.openCardMenu(card, more)); more.setAttribute('aria-haspopup', 'menu');
+    const grip = button(t("移动卡片：{0}", card.title || t('未命名卡片')), 'grip', 'linb-icon-button linb-card-grip', () => this.openCardMenu(card, grip)); grip.draggable = false;
+    grip.setAttribute('aria-haspopup', 'menu'); grip.title = t("拖动排序，或点按选择移动位置");
     this.bindPointerDrag(grip, article, card);
     head.append(grip, title, more); inner.append(head);
     if (card.body.trim()) {
@@ -199,9 +206,9 @@ export class WallApp {
       } catch { body.textContent = card.body; }
       inner.append(body);
     }
-    const safeUrl = safeExternalUrl(card.link);
+    const safeUrl = cardPreviewUrl(card.link, card.body);
     if (safeUrl) {
-      const link = button(new URL(safeUrl).hostname.replace(/^www\./, ''), 'link', 'linb-link-pill', () => this.host.openLink(safeUrl)); link.append(icon('arrow')); link.title = safeUrl; inner.append(link);
+      inner.append(this.linkPreview(safeUrl));
     }
     const otherAttachments = card.attachments.filter(attachment => attachment !== imageAttachment);
     if (otherAttachments.length) { const attachments = el('div', 'linb-card-attachments'); otherAttachments.forEach(attachment => attachments.append(button(attachment.name, attachment.mime.startsWith('image/') ? 'image' : 'file', 'linb-attachment-link', () => this.host.openAttachment(attachment)))); inner.append(attachments); }
@@ -217,6 +224,37 @@ export class WallApp {
       this.commitDrop(this.draggedId, article, event.clientX, event.clientY); this.clearDragState();
     });
     return article;
+  }
+
+
+  private linkPreview(url: string): HTMLElement {
+    const link = button(t("打开链接：{0}", new URL(url).hostname), undefined, 'linb-link-preview', () => this.host.openLink(url));
+    link.title = url;
+    const render = (data: LinkPreview) => {
+      link.replaceChildren();
+      const image = previewUrl(data.image);
+      if (image || data.video) {
+        const media = el('div', 'linb-link-media');
+        if (image) {
+          const img = el('img'); img.alt = ''; img.loading = 'lazy'; img.referrerPolicy = 'no-referrer'; img.draggable = false; img.src = image;
+          img.addEventListener('error', () => { img.remove(); if (!data.video) media.remove(); }); media.append(img);
+        }
+        if (data.video) { const play = el('span', 'linb-link-play'); play.append(icon('play')); play.setAttribute('aria-label', t("视频")); media.append(play); }
+        link.append(media);
+      }
+      const text = el('div', 'linb-link-text'); text.append(el('strong', '', data.title));
+      if (data.description) text.append(el('span', 'linb-link-description', data.description));
+      const site = el('span', 'linb-link-site', new URL(url).hostname.replace(/^www\./, '')); site.append(icon('arrow')); text.append(site); link.append(text);
+    };
+    render(fallbackPreview(url));
+    const load = () => { void this.host.getLinkPreview?.(url).then(data => { if (!this.destroyed && link.isConnected) render(data); }).catch(() => {}); };
+    // Lazy cards do not fetch every saved link when opening a large board.
+    const Observer = this.root.ownerDocument.defaultView?.IntersectionObserver;
+    if (Observer && this.host.getLinkPreview) {
+      const observer = new Observer(entries => { if (entries.some(entry => entry.isIntersecting)) { observer.disconnect(); this.previewObservers.delete(observer); load(); } });
+      this.previewObservers.add(observer); observer.observe(link);
+    } else queueMicrotask(load);
+    return link;
   }
 
   private dropPosition(cardId: string, target: Element, clientX: number, clientY: number): { columnId: string; beforeId?: string; marker: HTMLElement; after: boolean } | null {
@@ -324,7 +362,7 @@ export class WallApp {
       // Replace host handlers: staged card offsets are not offsets in the full Markdown board.
       const checkbox = el('input'); checkbox.type = 'checkbox'; checkbox.className = 'task-list-item-checkbox';
       checkbox.checked = original.checked; checkbox.disabled = rendered.length !== markers.length;
-      checkbox.setAttribute('aria-label', `切换待办 ${index + 1}`); original.replaceWith(checkbox);
+      checkbox.setAttribute('aria-label', t("切换待办 {0}", index + 1)); original.replaceWith(checkbox);
     });
     body.addEventListener('click', event => {
       const checkbox = event.target as HTMLInputElement;
@@ -347,25 +385,25 @@ export class WallApp {
     const action = (label: string, symbol: string, run: () => void) => {
       const item = button(label, symbol, 'linb-menu-item', () => { this.closeMenu(true); this.requestCloseSheet(run); }); item.setAttribute('role', 'menuitem'); menu.append(item);
     };
-    action('重命名', 'edit', () => this.openSettings());
-    action('切换看板', 'folder', () => this.host.chooseBoard());
-    action('新建看板', 'plus', () => this.host.createBoard());
-    action('导出为 Markdown', 'export', () => void this.exportBoard());
+    action(t("重命名"), 'edit', () => this.openSettings());
+    action(t("切换看板"), 'folder', () => this.host.chooseBoard());
+    action(t("新建看板"), 'plus', () => this.host.createBoard());
+    action(t("导出为 Markdown"), 'export', () => void this.exportBoard());
     this.showMenu(menu, anchor);
   }
 
   private openCardMenu(card: WallCard, anchor: HTMLElement): void {
     this.closeMenu(); const menu = el('div', 'linb-menu'); menu.setAttribute('role', 'menu');
     const action = (label: string, symbol: string, run: () => void, destructive = false) => { const b = button(label, symbol, `linb-menu-item${destructive ? ' linb-danger' : ''}`, () => { this.closeMenu(true); run(); }); b.setAttribute('role', 'menuitem'); menu.append(b); };
-    action('编辑卡片', 'edit', () => this.openEditor(card));
+    action(t("编辑卡片"), 'edit', () => this.openEditor(card));
     const order = this.board.layout === 'wall' ? this.board.cards : this.board.cards.filter(item => item.columnId === card.columnId); const index = order.findIndex(item => item.id === card.id);
-    if (index > 0) action('向前移动', 'up', () => void this.simpleOperation({ type: 'card:move', id: card.id, columnId: card.columnId, beforeId: order[index - 1].id }));
-    if (index < order.length - 1) action('向后移动', 'down', () => void this.simpleOperation({ type: 'card:move', id: card.id, columnId: card.columnId, beforeId: order[index + 2]?.id }));
+    if (index > 0) action(t("向前移动"), 'up', () => void this.simpleOperation({ type: 'card:move', id: card.id, columnId: card.columnId, beforeId: order[index - 1].id }));
+    if (index < order.length - 1) action(t("向后移动"), 'down', () => void this.simpleOperation({ type: 'card:move', id: card.id, columnId: card.columnId, beforeId: order[index + 2]?.id }));
     if (this.board.columns.length > 1) {
-      menu.append(el('div', 'linb-menu-label', '移动到栏'));
+      menu.append(el('div', 'linb-menu-label', t("移动到栏")));
       this.board.columns.filter(column => column.id !== card.columnId).forEach(column => action(column.title, 'columns', () => void this.simpleOperation({ type: 'card:move', id: card.id, columnId: column.id })));
     }
-    menu.append(el('div', 'linb-menu-divider')); action('删除卡片', 'trash', () => void this.deleteCard(card), true);
+    menu.append(el('div', 'linb-menu-divider')); action(t("删除卡片"), 'trash', () => void this.deleteCard(card), true);
     this.showMenu(menu, anchor);
   }
   private showMenu(menu: HTMLElement, anchor: HTMLElement, point?: { x: number; y: number }): void {
@@ -377,7 +415,7 @@ export class WallApp {
   private closeMenu(restoreFocus = false): void { this.menu?.remove(); this.menu = null; if (restoreFocus && this.menuAnchor?.isConnected) this.menuAnchor.focus(); this.menuAnchor = null; }
   private async deleteCard(card: WallCard): Promise<void> {
     const original = clone(card); const beforeId = this.board.cards[this.board.cards.findIndex(item => item.id === card.id) + 1]?.id;
-    try { await this.operate({ type: 'card:delete', id: card.id, expectedUpdatedAt: card.updatedAt, expectedBody: card.body }); this.showToast('卡片已删除', '撤销', async () => { await this.operate({ type: 'card:add', card: original, beforeId: this.board.cards.some(item => item.id === beforeId) ? beforeId : undefined }); this.showToast('卡片已恢复'); }); }
+    try { await this.operate({ type: 'card:delete', id: card.id, expectedUpdatedAt: card.updatedAt, expectedBody: card.body }); this.showToast(t("卡片已删除"), t("撤销"), async () => { await this.operate({ type: 'card:add', card: original, beforeId: this.board.cards.some(item => item.id === beforeId) ? beforeId : undefined }); this.showToast(t("卡片已恢复")); }); }
     catch (error) { this.showToast(this.errorMessage(error)); }
   }
 
@@ -386,11 +424,23 @@ export class WallApp {
     this.lastFocusCardId = this.lastFocus?.closest<HTMLElement>('.linb-card')?.dataset.cardId;
     const overlay = el('div', 'linb-editor-overlay'); const panel = el('section', 'linb-editor'); panel.setAttribute('role', 'dialog'); panel.setAttribute('aria-modal', 'true'); panel.tabIndex = -1;
     const header = el('div', 'linb-editor-header'); const heading = el('div'); const titleNode = el('h2', '', title); titleNode.id = id('linb-sheet-title'); panel.setAttribute('aria-labelledby', titleNode.id); heading.append(titleNode); if (subtitle) heading.append(el('p', '', subtitle));
-    header.append(heading, button('关闭编辑面板', 'close', 'linb-icon-button', () => this.requestCloseSheet()));
-    const guard = el('div', 'linb-unsaved'); guard.hidden = true; guard.append(el('p', '', '还有未保存的修改'), button('继续编辑', undefined, 'linb-button', () => { guard.hidden = true; panel.querySelector<HTMLElement>('input:not([type=file]), textarea, select')?.focus(); }), button('放弃修改', undefined, 'linb-button linb-danger', () => { const close = this.sheet?.close; this.closeSheet(); close?.(); }));
+    header.append(heading, button(t("关闭编辑面板"), 'close', 'linb-icon-button', () => this.requestCloseSheet()));
+    const guard = el('div', 'linb-unsaved'); guard.hidden = true; guard.append(el('p', '', t("还有未保存的修改")), button(t("继续编辑"), undefined, 'linb-button', () => { guard.hidden = true; panel.querySelector<HTMLElement>('input:not([type=file]), textarea, select')?.focus(); }), button(t("放弃修改"), undefined, 'linb-button linb-danger', () => { const close = this.sheet?.close; this.closeSheet(); close?.(); }));
     const content = el('div', 'linb-editor-content'); const error = el('div', 'linb-form-error'); error.hidden = true; error.setAttribute('role', 'alert'); const footer = el('div', 'linb-editor-footer');
     panel.append(header, guard, content, error, footer); overlay.append(panel); this.root.append(overlay);
-    const state: SheetState = { overlay, panel, guard, dirty, busy: false, close: () => {} }; this.sheet = state;
+    const win = this.root.ownerDocument.defaultView!; const viewport = win.visualViewport;
+    const fit = () => {
+      const rect = this.root.getBoundingClientRect();
+      const top = Math.max(rect.top, viewport?.offsetTop || 0);
+      const bottom = Math.min(rect.bottom, (viewport?.offsetTop || 0) + (viewport?.height || win.innerHeight));
+      overlay.style.top = `${Math.max(0, top - rect.top)}px`;
+      overlay.style.height = `${Math.max(0, bottom - top)}px`;
+    };
+    // Only constrain height when geometry exists (the DOM test host has no layout).
+    if (this.root.getBoundingClientRect().height) fit();
+    viewport?.addEventListener('resize', fit); viewport?.addEventListener('scroll', fit); win.addEventListener('resize', fit);
+    const resize = win.ResizeObserver ? new win.ResizeObserver(fit) : null; resize?.observe(this.root);
+    const state: SheetState = { overlay, panel, guard, dirty, busy: false, close: () => {}, cleanup: () => { resize?.disconnect(); viewport?.removeEventListener('resize', fit); viewport?.removeEventListener('scroll', fit); win.removeEventListener('resize', fit); } }; this.sheet = state;
     overlay.addEventListener('click', event => { if (event.target === overlay) this.requestCloseSheet(); });
     queueMicrotask(() => { if (this.sheet === state) panel.querySelector<HTMLElement>('input, textarea, select, button')?.focus(); });
     return { state, content, footer, error };
@@ -401,12 +451,12 @@ export class WallApp {
   }
   private requestCloseSheet(after?: () => void): void {
     if (!this.sheet) { after?.(); return; }
-    if (this.sheet.busy) { this.showToast('正在保存或导入附件，请稍候'); return; }
+    if (this.sheet.busy) { this.showToast(t("正在保存或导入附件，请稍候")); return; }
     if (this.sheet.dirty()) { this.sheet.close = after || (() => {}); this.sheet.guard.hidden = false; this.sheet.guard.querySelector<HTMLButtonElement>('button')?.focus(); return; }
     this.closeSheet(); after?.();
   }
   private closeSheet(): void {
-    if (!this.sheet) return; this.sheet.overlay.remove(); this.sheet = null;
+    if (!this.sheet) return; this.sheet.cleanup(); this.sheet.overlay.remove(); this.sheet = null;
     if (this.lastFocus?.isConnected) this.lastFocus.focus();
     else if (this.lastFocusCardId) {
       const card = Array.from(this.content.querySelectorAll<HTMLElement>('.linb-card')).find(node => node.dataset.cardId === this.lastFocusCardId);
@@ -422,15 +472,15 @@ export class WallApp {
   private openEditor(card?: WallCard, columnId?: string, initialFiles?: File[]): void {
     if (this.sheet) { this.requestCloseSheet(() => this.openEditor(card, columnId, initialFiles)); return; }
     const original = card ? clone(card) : undefined; const draft = cardDraft(original, columnId || this.board.columns[0]?.id || ''); const initial = JSON.stringify(draft);
-    const { state, content, footer, error } = this.createSheet(original ? '编辑卡片' : '添加卡片', '', () => JSON.stringify(draft) !== initial);
-    const title = this.input(draft.title, '标题（可选）'); title.maxLength = 240; title.addEventListener('input', () => { draft.title = title.value; });
-    const body = el('textarea', 'linb-input linb-body-input'); body.value = draft.body || ''; body.placeholder = '写点内容…'; body.rows = 8; body.addEventListener('input', () => { draft.body = body.value; });
+    const { state, content, footer, error } = this.createSheet(original ? t("编辑卡片") : t("添加卡片"), '', () => JSON.stringify(draft) !== initial);
+    const title = this.input(draft.title, t("标题（可选）")); title.maxLength = 240; title.addEventListener('input', () => { draft.title = title.value; });
+    const body = el('textarea', 'linb-input linb-body-input'); body.value = draft.body || ''; body.placeholder = t("写点内容…"); body.rows = 8; body.addEventListener('input', () => { draft.body = body.value; });
     body.addEventListener('contextmenu', event => {
       if (state.busy || body.selectionStart === body.selectionEnd || !body.value.slice(body.selectionStart, body.selectionEnd).trim()) return;
       event.preventDefault(); event.stopPropagation(); this.closeMenu();
       const start = body.selectionStart; const end = body.selectionEnd;
       const menu = el('div', 'linb-menu'); menu.setAttribute('role', 'menu');
-      const convert = button('转为待办复选框', 'check', 'linb-menu-item', () => {
+      const convert = button(t("转为待办复选框"), 'check', 'linb-menu-item', () => {
         this.closeMenu(true);
         if (this.sheet !== state || state.busy) return;
         const converted = taskifySelection(body.value, start, end);
@@ -439,40 +489,58 @@ export class WallApp {
       convert.setAttribute('role', 'menuitem'); menu.append(convert);
       this.showMenu(menu, body, event.clientX || event.clientY ? { x: event.clientX, y: event.clientY } : undefined);
     });
+    const applyText = (edit: TextEdit) => {
+      body.focus({ preventScroll: true }); body.select();
+      // Keep formatting in the browser's undo history when supported by its editor.
+      if (!body.ownerDocument.execCommand?.('insertText', false, edit.text)) body.value = edit.text;
+      draft.body = body.value; body.setSelectionRange(edit.start, edit.end);
+    };
+    const textTools = el('div', 'linb-text-tools'); textTools.setAttribute('role', 'group'); textTools.setAttribute('aria-label', t("内容格式"));
+    const formats: [MarkdownTool, string, string][] = [['task', t("待办"), 'check'], ['bullet', t("列表"), 'task'], ['number', t("编号"), 'task'], ['bold', t("加粗"), 'bold'], ['link', t("插入链接"), 'link']];
+    for (const [tool, label, glyph] of formats) {
+      const control = button(label, glyph, 'linb-text-tool', () => { if (!state.busy) applyText(formatText(body.value, body.selectionStart, body.selectionEnd, tool)); });
+      control.addEventListener('pointerdown', event => event.preventDefault()); textTools.append(control);
+    }
+    body.addEventListener('keydown', event => {
+      if (event.isComposing || state.busy) return;
+      if (event.key === 'Enter' && !event.shiftKey && !event.metaKey && !event.ctrlKey) { const edit = continueList(body.value, body.selectionStart, body.selectionEnd); if (edit) { event.preventDefault(); applyText(edit); } }
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'b') { event.preventDefault(); applyText(formatText(body.value, body.selectionStart, body.selectionEnd, 'bold')); }
+    });
+    const bodyField = this.field(t("内容"), body); bodyField.append(textTools);
     const column = el('select', 'linb-input'); this.board.columns.forEach(item => { const option = el('option', '', item.title); option.value = item.id; column.append(option); }); column.value = draft.columnId || ''; column.addEventListener('change', () => { draft.columnId = column.value; });
     const color = el('select', 'linb-input linb-color-select');
-    CARD_COLORS.forEach(([value, label]) => { const option = el('option', '', label); option.value = value; color.append(option); });
+    CARD_COLORS().forEach(([value, label]) => { const option = el('option', '', label); option.value = value; color.append(option); });
     color.value = draft.color || 'white'; color.dataset.cardColor = color.value;
     color.addEventListener('change', () => { draft.color = color.value as CardColor; color.dataset.cardColor = color.value; });
     const url = this.input(draft.link, 'https://'); url.type = 'url'; url.addEventListener('input', () => { draft.link = url.value; url.removeAttribute('aria-invalid'); });
-    content.append(this.field('标题', title), this.field('卡片颜色', color), this.field('内容', body, '支持 Markdown；选中文字后右键可转为待办'), this.field('所属分栏', column), this.field('链接（可选）', url));
+    content.append(this.field(t("标题"), title), this.field(t("卡片颜色"), color), bodyField, this.field(t("所属分栏"), column), this.field(t("链接（可选）"), url));
     const attachments = el('div', 'linb-editor-attachments');
-    const picker = el('input', 'linb-file-input'); picker.type = 'file'; picker.multiple = true; picker.tabIndex = -1; picker.setAttribute('aria-label', '选择图片或附件');
-    const addImage = button('添加附件', 'file', 'linb-upload-button', () => picker.click());
-    const chooseImage = button('从库中选图', 'image', 'linb-upload-button linb-vault-pick', () => void chooseExistingImage());
+    const picker = el('input', 'linb-file-input'); picker.type = 'file'; picker.multiple = true; picker.tabIndex = -1; picker.setAttribute('aria-label', t("选择图片或附件"));
+    const addImage = button(t("添加附件"), 'file', 'linb-upload-button', () => picker.click());
+    const chooseImage = button(t("从库中选图"), 'image', 'linb-upload-button linb-vault-pick', () => void chooseExistingImage());
     chooseImage.disabled = !this.host.chooseVaultImages;
-    if (!this.host.chooseVaultImages) chooseImage.title = '请在 Obsidian 中使用，网页预览无法读取笔记库';
+    if (!this.host.chooseVaultImages) chooseImage.title = t("请在 Obsidian 中使用，网页预览无法读取笔记库");
     const uploadActions = el('div', 'linb-upload-actions'); uploadActions.append(addImage, chooseImage);
-    const uploadHint = el('span', 'linb-upload-hint', this.host.chooseVaultImages ? '上传新文件，或直接引用库内图片' : '支持拖入或粘贴；从库中选图需在 Obsidian 中使用');
+    const uploadHint = el('span', 'linb-upload-hint', this.host.chooseVaultImages ? t("上传新文件，或直接引用库内图片") : t("支持拖入或粘贴；从库中选图需在 Obsidian 中使用"));
     const upload = el('div', 'linb-upload'); upload.append(uploadActions, uploadHint, picker);
-    content.append(this.field('图片与附件', attachments), upload);
+    content.append(this.field(t("图片与附件"), attachments), upload);
     const renderAttachments = () => {
       attachments.replaceChildren(); (draft.attachments || []).forEach((attachment, index) => {
         const figure = el('div', 'linb-editor-attachment');
         if (attachment.mime.startsWith('image/')) { const img = el('img'); img.src = this.host.resolveAsset(attachment.path); img.alt = attachment.name; figure.append(img); }
         else figure.append(icon('file'));
         const name = el('span', '', attachment.name); name.title = attachment.name;
-        figure.append(name, button(`移除附件：${attachment.name}`, 'close', 'linb-icon-button', () => { draft.attachments?.splice(index, 1); renderAttachments(); })); attachments.append(figure);
+        figure.append(name, button(t("移除附件：{0}", attachment.name), 'close', 'linb-icon-button', () => { draft.attachments?.splice(index, 1); renderAttachments(); })); attachments.append(figure);
       });
     };
     renderAttachments();
-    const cancel = button('取消', undefined, 'linb-button', () => this.requestCloseSheet());
-    const save = button(original ? '保存修改' : '添加卡片', 'check', 'linb-button linb-primary', () => void submit());
+    const cancel = button(t("取消"), undefined, 'linb-button', () => this.requestCloseSheet());
+    const save = button(original ? t("保存修改") : t("添加卡片"), 'check', 'linb-button linb-primary', () => void submit());
     footer.append(cancel, save);
-    const setBusy = (busy: boolean, text = '') => { this.setSheetBusy(state, busy); save.disabled = busy; cancel.disabled = busy; addImage.disabled = busy; chooseImage.disabled = busy || !this.host.chooseVaultImages; save.querySelector('span')!.textContent = busy ? text : original ? '保存修改' : '添加卡片'; };
+    const setBusy = (busy: boolean, text = '') => { this.setSheetBusy(state, busy); save.disabled = busy; cancel.disabled = busy; addImage.disabled = busy; chooseImage.disabled = busy || !this.host.chooseVaultImages; save.querySelector('span')!.textContent = busy ? text : original ? t("保存修改") : t("添加卡片"); };
     const chooseExistingImage = async () => {
       if (state.busy || !this.host.chooseVaultImages) return;
-      setBusy(true, '正在选择…'); error.hidden = true;
+      setBusy(true, t("正在选择…")); error.hidden = true;
       try {
         const selected = await this.host.chooseVaultImages();
         if (this.sheet !== state || this.destroyed) return;
@@ -485,7 +553,7 @@ export class WallApp {
     };
     const importFiles = async (files: File[]) => {
       if (state.busy || !files.length) return;
-      setBusy(true, '正在导入…'); error.hidden = true;
+      setBusy(true, t("正在导入…")); error.hidden = true;
       try { const imported = await this.host.importFiles(files); if (this.sheet !== state || this.destroyed) return; draft.attachments = [...(draft.attachments || []), ...imported]; renderAttachments(); }
       catch (failure) { if (this.sheet === state) { error.hidden = false; error.textContent = this.errorMessage(failure); } }
       finally { if (this.sheet === state) { setBusy(false); picker.value = ''; } }
@@ -495,65 +563,65 @@ export class WallApp {
     const submit = async () => {
       if (state.busy) return;
       error.hidden = true; draft.title = title.value.trim(); draft.body = body.value; draft.link = url.value.trim();
-      if (!draft.title && !draft.body?.trim() && !draft.attachments?.length && !draft.link) { error.textContent = '请写入内容或添加附件。'; error.hidden = false; title.focus(); return; }
-      if (draft.link && !safeExternalUrl(draft.link)) { error.textContent = '链接请以 https:// 或 http:// 开头。'; error.hidden = false; url.setAttribute('aria-invalid', 'true'); url.focus(); return; }
-      if (!this.board.columns.some(item => item.id === draft.columnId)) { error.textContent = '这个分栏已经不存在，请选择其他分栏后保存。'; error.hidden = false; return; }
-      setBusy(true, '正在保存…');
+      if (!draft.title && !draft.body?.trim() && !draft.attachments?.length && !draft.link) { error.textContent = t("请写入内容或添加附件。"); error.hidden = false; title.focus(); return; }
+      if (draft.link && !safeExternalUrl(draft.link)) { error.textContent = t("链接请以 https:// 或 http:// 开头。"); error.hidden = false; url.setAttribute('aria-invalid', 'true'); url.focus(); return; }
+      if (!this.board.columns.some(item => item.id === draft.columnId)) { error.textContent = t("这个分栏已经不存在，请选择其他分栏后保存。"); error.hidden = false; return; }
+      setBusy(true, t("正在保存…"));
       try {
         if (original) await this.operate({ type: 'card:update', id: original.id, patch: clone(draft), expectedUpdatedAt: original.updatedAt, expectedBody: original.body });
         else { const created = createCard(draft.columnId || '', clone(draft)); await this.operate({ type: 'card:add', card: created }); }
-        if (this.sheet === state) this.closeSheet(); this.showToast(original ? '卡片已更新' : '卡片已添加');
-      } catch (failure) { if (this.sheet === state) { error.hidden = false; error.textContent = `${this.errorMessage(failure)} 你的内容仍保留在这里，可以复制后重试。`; } }
+        if (this.sheet === state) this.closeSheet(); this.showToast(original ? t("卡片已更新") : t("卡片已添加"));
+      } catch (failure) { if (this.sheet === state) { error.hidden = false; error.textContent = t("{0} 你的内容仍保留在这里，可以复制后重试。", this.errorMessage(failure)); } }
       finally { if (this.sheet === state) setBusy(false); }
     };
     state.panel.addEventListener('keydown', event => { if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') { event.preventDefault(); void submit(); } });
-    queueMicrotask(() => { if (this.sheet === state) title.focus(); });
+    queueMicrotask(() => { if (this.sheet === state) { if (window.matchMedia?.('(any-pointer: coarse)').matches || document.body.classList.contains('is-mobile')) state.panel.focus({ preventScroll: true }); else title.focus({ preventScroll: true }); } });
     if (initialFiles?.length) void importFiles(initialFiles);
   }
 
   private openSettings(): void {
     if (this.sheet) { this.requestCloseSheet(() => this.openSettings()); return; }
     const draft = { title: this.board.title, description: this.board.description }; const initial = JSON.stringify(draft);
-    const { state, content, footer, error } = this.createSheet('重命名', '', () => JSON.stringify(draft) !== initial);
-    const title = this.input(draft.title, '看板名称'); title.maxLength = 120; title.addEventListener('input', () => { draft.title = title.value; });
-    const description = el('textarea', 'linb-input'); description.rows = 3; description.value = draft.description; description.placeholder = '说明（可选）'; description.addEventListener('input', () => { draft.description = description.value; });
-    content.append(this.field('名称', title), this.field('说明（可选）', description));
-    const cancel = button('取消', undefined, 'linb-button', () => this.requestCloseSheet()); const save = button('保存', 'check', 'linb-button linb-primary', async () => {
-      if (state.busy) return; if (!draft.title.trim()) { error.textContent = '请填写看板名称。'; error.hidden = false; title.focus(); return; }
+    const { state, content, footer, error } = this.createSheet(t("重命名"), '', () => JSON.stringify(draft) !== initial);
+    const title = this.input(draft.title, t("看板名称")); title.maxLength = 120; title.addEventListener('input', () => { draft.title = title.value; });
+    const description = el('textarea', 'linb-input'); description.rows = 3; description.value = draft.description; description.placeholder = t("说明（可选）"); description.addEventListener('input', () => { draft.description = description.value; });
+    content.append(this.field(t("名称"), title), this.field(t("说明（可选）"), description));
+    const cancel = button(t("取消"), undefined, 'linb-button', () => this.requestCloseSheet()); const save = button(t("保存"), 'check', 'linb-button linb-primary', async () => {
+      if (state.busy) return; if (!draft.title.trim()) { error.textContent = t("请填写看板名称。"); error.hidden = false; title.focus(); return; }
       this.setSheetBusy(state, true); save.disabled = true; error.hidden = true;
-      try { await this.operate({ type: 'board:update', patch: { ...draft, title: draft.title.trim() } }); if (this.sheet === state) this.closeSheet(); this.showToast('已保存'); }
+      try { await this.operate({ type: 'board:update', patch: { ...draft, title: draft.title.trim() } }); if (this.sheet === state) this.closeSheet(); this.showToast(t("已保存")); }
       catch (failure) { if (this.sheet === state) { error.textContent = this.errorMessage(failure); error.hidden = false; } }
       finally { this.setSheetBusy(state, false); save.disabled = false; }
-    }); footer.append(cancel, save); queueMicrotask(() => { if (this.sheet === state) title.focus(); });
+    }); footer.append(cancel, save); queueMicrotask(() => { if (this.sheet === state) { if (window.matchMedia?.('(any-pointer: coarse)').matches || document.body.classList.contains('is-mobile')) state.panel.focus({ preventScroll: true }); else title.focus({ preventScroll: true }); } });
   }
 
   private openColumnEditor(columnId?: string): void {
     if (this.sheet) { this.requestCloseSheet(() => this.openColumnEditor(columnId)); return; }
     const column = this.board.columns.find(item => item.id === columnId); const draft = { title: column?.title || '' }; const initial = JSON.stringify(draft);
-    const { state, content, footer, error } = this.createSheet(column ? '编辑栏' : '添加栏', '', () => JSON.stringify(draft) !== initial);
-    const title = this.input(draft.title, '栏名称'); title.maxLength = 80; title.addEventListener('input', () => { draft.title = title.value; });
-    content.append(this.field('栏名称', title));
+    const { state, content, footer, error } = this.createSheet(column ? t("编辑栏") : t("添加栏"), '', () => JSON.stringify(draft) !== initial);
+    const title = this.input(draft.title, t("栏名称")); title.maxLength = 80; title.addEventListener('input', () => { draft.title = title.value; });
+    content.append(this.field(t("栏名称"), title));
     if (column && this.board.columns.length > 1) {
       const transfer = el('select', 'linb-input'); this.board.columns.filter(item => item.id !== column.id).forEach(item => { const option = el('option', '', item.title); option.value = item.id; transfer.append(option); });
-      const removal = el('div', 'linb-column-removal'); removal.append(el('p', '', '删除栏时，将卡片移动到：'), transfer, button('删除此栏', 'trash', 'linb-button linb-danger', async () => {
+      const removal = el('div', 'linb-column-removal'); removal.append(el('p', '', t("删除栏时，将卡片移动到：")), transfer, button(t("删除此栏"), 'trash', 'linb-button linb-danger', async () => {
         if (state.busy) return; this.setSheetBusy(state, true);
-        try { await this.operate({ type: 'column:delete', id: column.id, moveToId: transfer.value }); if (this.sheet === state) this.closeSheet(); this.showToast('栏已删除，卡片已转移'); }
+        try { await this.operate({ type: 'column:delete', id: column.id, moveToId: transfer.value }); if (this.sheet === state) this.closeSheet(); this.showToast(t("栏已删除，卡片已转移")); }
         catch (failure) { error.textContent = this.errorMessage(failure); error.hidden = false; } finally { this.setSheetBusy(state, false); }
       })); content.append(removal);
     }
-    const cancel = button('取消', undefined, 'linb-button', () => this.requestCloseSheet()); const save = button(column ? '保存栏' : '添加栏', 'check', 'linb-button linb-primary', async () => {
-      if (state.busy) return; if (!draft.title.trim()) { error.textContent = '请填写栏名称。'; error.hidden = false; title.focus(); return; }
+    const cancel = button(t("取消"), undefined, 'linb-button', () => this.requestCloseSheet()); const save = button(column ? t("保存栏") : t("添加栏"), 'check', 'linb-button linb-primary', async () => {
+      if (state.busy) return; if (!draft.title.trim()) { error.textContent = t("请填写栏名称。"); error.hidden = false; title.focus(); return; }
       this.setSheetBusy(state, true); save.disabled = true; error.hidden = true;
-      try { await this.operate(column ? { type: 'column:update', id: column.id, patch: { title: draft.title.trim() } } : { type: 'column:add', column: { id: id('column'), title: draft.title.trim(), color: 'white' } }); if (this.sheet === state) this.closeSheet(); this.showToast(column ? '栏已更新' : '栏已添加'); }
+      try { await this.operate(column ? { type: 'column:update', id: column.id, patch: { title: draft.title.trim() } } : { type: 'column:add', column: { id: id('column'), title: draft.title.trim(), color: 'white' } }); if (this.sheet === state) this.closeSheet(); this.showToast(column ? t("栏已更新") : t("栏已添加")); }
       catch (failure) { error.textContent = this.errorMessage(failure); error.hidden = false; }
       finally { this.setSheetBusy(state, false); save.disabled = false; }
-    }); footer.append(cancel, save); queueMicrotask(() => { if (this.sheet === state) title.focus(); });
+    }); footer.append(cancel, save); queueMicrotask(() => { if (this.sheet === state) { if (window.matchMedia?.('(any-pointer: coarse)').matches || document.body.classList.contains('is-mobile')) state.panel.focus({ preventScroll: true }); else title.focus({ preventScroll: true }); } });
   }
 
   private showToast(message: string, actionLabel?: string, action?: () => Promise<void>): void {
     if (this.destroyed) return; clearTimeout(this.toastTimer); this.toast.replaceChildren(el('span', '', message));
     if (actionLabel && action) { const actionButton = button(actionLabel, undefined, 'linb-toast-action', async () => { clearTimeout(this.toastTimer); actionButton.disabled = true; try { await action(); } catch (failure) { this.showToast(this.errorMessage(failure)); } }); this.toast.append(actionButton); }
-    this.toast.append(button('关闭提示', 'close', 'linb-icon-button', () => { this.toast.hidden = true; })); this.toast.hidden = false;
+    this.toast.append(button(t("关闭提示"), 'close', 'linb-icon-button', () => { this.toast.hidden = true; })); this.toast.hidden = false;
     this.toastTimer = setTimeout(() => { this.toast.hidden = true; }, action ? 15000 : 6500);
   }
   private hasFiles(event: DragEvent): boolean { return Array.from(event.dataTransfer?.types || []).includes('Files'); }
@@ -562,7 +630,7 @@ export class WallApp {
     this.root.classList.remove('linb-file-over'); this.root.querySelectorAll('.is-drop-target').forEach(node => node.classList.remove('is-drop-target')); if (!this.hasFiles(event)) return; event.preventDefault(); event.stopPropagation();
     const files = Array.from(event.dataTransfer?.files || []); if (!files.length) return;
     const columnId = (event.target instanceof Element ? event.target.closest<HTMLElement>('.linb-column')?.dataset.columnId : undefined);
-    if (this.sheet?.onFiles) void this.sheet.onFiles(files); else if (this.sheet) this.showToast('请先保存或关闭当前面板，再添加附件'); else this.openEditor(undefined, columnId, files);
+    if (this.sheet?.onFiles) void this.sheet.onFiles(files); else if (this.sheet) this.showToast(t("请先保存或关闭当前面板，再添加附件")); else this.openEditor(undefined, columnId, files);
   };
   private onOutsidePointer = (event: PointerEvent): void => { if (this.menu && !this.menu.contains(event.target as Node) && !this.menuAnchor?.contains(event.target as Node)) this.closeMenu(); };
   private onKeyDown = (event: KeyboardEvent): void => {

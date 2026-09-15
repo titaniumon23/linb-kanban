@@ -39,7 +39,8 @@
     #app { width:100%; max-width:var(--preview-width,100%); height:100%; min-width:0; background:var(--background-primary); }
     .preview-failure { margin:24px; max-width:65ch; }
     @media(pointer:coarse) { .preview-strip :is(button,select) { min-height:44px; } }
-  </style>
+  .is-mobile { --input-radius: 50px; --button-radius: 50px; }
+</style>
 </head>
-<body><div class="preview-strip"><span>预览 · 示例内容</span><select id="device" aria-label="预览设备"><option value="auto">电脑 / 自适应</option><option value="768">平板 · 768</option><option value="390">手机 · 390</option><option value="320">窄屏 · 320</option></select><button id="theme">深浅色</button><button id="reset">重置示例</button></div><div id="preview-shell"><main id="app"></main></div><script src="app.js"></script></body>
+<body><div class="preview-strip"><span>预览 · 示例内容</span><select id="device" aria-label="预览设备"><option value="auto">电脑 / 自适应</option><option value="768">平板 · 768</option><option value="390">手机 · 390</option><option value="320">窄屏 · 320</option></select><label>语言 <select id="language" aria-label="预览语言"><option value="zh">中文</option><option value="en">English</option></select></label><label><input id="mobile-style" type="checkbox">移动端样式</label><button id="theme">深浅色</button><button id="reset">重置示例</button></div><div id="preview-shell"><main id="app"></main></div><script src="app.js"></script></body>
 </html>

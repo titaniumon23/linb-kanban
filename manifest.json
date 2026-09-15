@@ -1,7 +1,7 @@
 {
   "id": "linb-kanban",
   "name": "LinB Kanban",
-  "version": "0.3.4",
+  "version": "0.4.0",
   "minAppVersion": "1.8.7",
   "description": "Organize Markdown, images and files in columns or a masonry wall that follows your theme.",
   "author": "titaniumon23",
